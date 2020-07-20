@@ -1,4 +1,4 @@
-from typing import Type, Any, TypeVar, Callable, Generic, List, Optional, Dict
+from typing import Type, Any, TypeVar, Callable, Generic, List, Optional, Dict, Iterable, Set
 from dataclasses import dataclass
 from inspect import signature
 
@@ -39,9 +39,30 @@ class FieldMapRule(Generic[L, R]):
     converter: Optional[Callable[[Any], Any]]
 
 
+def uncase(field_name: str) -> str:
+    return field_name.replace('_', '').lower()
+
+
+def to_uncase_dict(fields: Iterable[str]) -> Dict[str, str]:
+    return {uncase(field): field for field in fields}
+
+
 class CommonTypeDescriptor(Generic[T]):
     def __init__(self, t: Type[T]):
         self.constructor_parameters = signature(t.__init__).parameters
+        self.uncased_dict = to_uncase_dict(self.constructor_parameters.keys())
+
+    def get_field_names(self, ignore_case: bool) -> Set[str]:
+        if ignore_case:
+            return set(self.uncased_dict.keys()).difference({'self'})
+        else:
+            return set(self.constructor_parameters.keys()).difference({'self'})
+
+    def get_canonical_field_name(self, field_name: str):
+        if field_name in self.constructor_parameters:
+            return field_name
+        else:
+            return self.uncased_dict.get(field_name)
 
     def get_getter(self, field_name: str) -> Callable[[T], Any]:
         def getter(obj: T):
@@ -112,7 +133,19 @@ class MappingConfigFlow:
         self.l_to_r_empty()
         return self
 
-    def map_matching(self) -> 'MappingConfigFlow':
+    def map_matching(self, ignore_case: bool = False) -> 'MappingConfigFlow':
+        l_fields = self.left_descr.get_field_names(ignore_case)
+        r_fields = self.right_descr.get_field_names(ignore_case)
+        common_fields = l_fields.intersection(r_fields)
+        for field in common_fields:
+            lf_name = self.left_descr.get_canonical_field_name(field)
+            if lf_name is None:
+                raise Exception(f"Not found canonical name for uncased '{field}' for class {self.left}")
+            rf_name = self.right_descr.get_canonical_field_name(field)
+            if rf_name is None:
+                raise Exception(f"Not found canonical name for uncased '{field}' for class {self.right}")
+
+            self.bidirectional(lf_name, rf_name)
         return self
 
     def register(self) -> None:
