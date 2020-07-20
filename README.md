@@ -1,2 +1,1 @@
 # panamap
-Python object mapper
