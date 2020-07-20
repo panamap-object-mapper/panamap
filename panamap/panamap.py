@@ -31,12 +31,15 @@ R = TypeVar('R')
 
 @dataclass
 class FieldMapRule(Generic[L, R]):
-    l_field_name: str
-    l_field_getter: Callable[[L], Any]
-    r_field_name: str
-    r_field_is_constructor_arg: bool
-    r_field_setter: Optional[Callable[[R, Any], None]]
-    converter: Optional[Callable[[Any], Any]]
+    from_field: str
+    from_field_getter: Callable[[L], Any]
+    to_field: str
+    to_field_is_constructor_arg: bool
+    to_field_setter: Optional[Callable[[R, Any], None]]
+
+    from_field_type: Optional[Type[Any]] = None
+    to_field_type: Optional[Type[Any]] = None
+    converter: Optional[Callable[[Any], Any]] = None
 
 
 def uncase(field_name: str) -> str:
@@ -80,6 +83,13 @@ class CommonTypeDescriptor(Generic[T]):
     def is_constructor_param(self, field_name) -> bool:
         return field_name in self.constructor_parameters
 
+    def get_field_type(self, field_name: str) -> Type[Any]:
+        param = self.constructor_parameters.get(field_name)
+        if param is not None:
+            return param.annotation
+        else:
+            return None
+
 
 class MappingConfigFlow:
     def __init__(self, mapper: 'Mapper', left: Type, right: Type):
@@ -97,21 +107,33 @@ class MappingConfigFlow:
 
     def l_to_r(self, l_field_name: str, r_field_name: str, converter: Callable[[Any], Any] = None) -> 'MappingConfigFlow':
         lget = self.left_descr.get_getter(l_field_name)
+        ltype = self.left_descr.get_field_type(l_field_name)
+
         rset = self.right_descr.get_setter(r_field_name)
+        rtype = self.right_descr.get_field_type(r_field_name)
+
         if self.right_descr.is_constructor_param(r_field_name):
-            self.l_to_r_map_list.append(FieldMapRule(l_field_name, lget, r_field_name, True, None, converter))
+            self.l_to_r_map_list.append(FieldMapRule(l_field_name, lget, r_field_name, True, None, converter=converter,
+                                                     from_field_type=ltype, to_field_type=rtype))
         else:
-            self.l_to_r_map_list.append(FieldMapRule(l_field_name, lget, r_field_name, False, rset, converter))
+            self.l_to_r_map_list.append(FieldMapRule(l_field_name, lget, r_field_name, False, rset, converter=converter,
+                                                     from_field_type=ltype, to_field_type=rtype))
         self.l_to_r_touched = True
         return self
 
     def r_to_l(self, l_field_name: str, r_field_name: str, converter: Callable[[Any], Any] = None) -> 'MappingConfigFlow':
         lset = self.left_descr.get_setter(l_field_name)
+        ltype = self.left_descr.get_field_type(l_field_name)
+
         rget = self.right_descr.get_getter(r_field_name)
+        rtype = self.right_descr.get_field_type(r_field_name)
+
         if self.left_descr.is_constructor_param(l_field_name):
-            self.r_to_l_map_list.append(FieldMapRule(r_field_name, rget, l_field_name, True, None, converter))
+            self.r_to_l_map_list.append(FieldMapRule(r_field_name, rget, l_field_name, True, None, converter=converter,
+                                                     from_field_type=rtype, to_field_type=ltype))
         else:
-            self.r_to_l_map_list.append(FieldMapRule(r_field_name, rget, l_field_name, False, lset, converter))
+            self.r_to_l_map_list.append(FieldMapRule(r_field_name, rget, l_field_name, False, lset, converter=converter,
+                                                     from_field_type=rtype, to_field_type=ltype))
         self.r_to_l_touched = True
         return self
 
@@ -171,27 +193,38 @@ class Mapper:
 
     def map(self, a_obj: Any, b: Type[T]) -> T:
         a = a_obj.__class__
-        if a not in self.map_rules or b not in self.map_rules[a]:
+        if not self._has_mapping(a, b):
             raise MissingMappingException(a, b)
 
         constructor_args = {}
         other_fields_operations = []
         for rule in self.map_rules[a][b]:
-            getter = rule.l_field_getter
-            setter = rule.r_field_setter
+            getter = rule.from_field_getter
+            setter = rule.to_field_setter
             converter = rule.converter
+            from_type = rule.from_field_type
+            to_type = rule.to_field_type
 
             if converter is not None:
                 def wrapped_getter(b_obj: Type[T]) -> Any:
                     try:
-                        return converter(rule.l_field_getter(b_obj))
+                        return converter(rule.from_field_getter(b_obj))
                     except Exception as e:
-                        raise FieldMappingException(a, b, rule.l_field_name, rule.r_field_name, 'exception on value conversion') from e
+                        raise FieldMappingException(a, b, rule.from_field, rule.to_field, 'exception on value conversion') from e
 
                 getter = wrapped_getter
 
-            if rule.r_field_is_constructor_arg:
-                constructor_args[rule.r_field_name] = getter(a_obj)
+            elif self._has_mapping(from_type, to_type):
+                def wrapped_getter(b_obj: Type[T]) -> Any:
+                    try:
+                        return self.map(rule.from_field_getter(b_obj), to_type)
+                    except Exception as e:
+                        raise FieldMappingException(a, b, rule.from_field, rule.to_field, 'exception on mapping nesting class') from e
+
+                getter = wrapped_getter
+
+            if rule.to_field_is_constructor_arg:
+                constructor_args[rule.to_field] = getter(a_obj)
             else:
                 other_fields_operations.append(lambda l, r: setter(r, getter(l)))
 
@@ -201,3 +234,5 @@ class Mapper:
 
         return b_obj
 
+    def _has_mapping(self, a: Type[Any], b: Type[Any]) -> bool:
+        return a in self.map_rules and b in self.map_rules[a]
