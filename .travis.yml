@@ -1,8 +1,30 @@
 language: python
+dist: xenial
+sudo: true
 python:
-  - "3.7"
-  - "3.8"
+- '3.7'
+- "3.8"
 install:
-  - python3 setup.py install
+- python setup.py install
+before_script:
+- pip install nox
 script:
-  - pytest
+- nox
+stages:
+- test
+- name: deploy
+  if: branch = master
+jobs:
+  include:
+  - stage: test
+  - stage: deploy
+    python: '3.7'
+    script: skip
+    deploy:
+      provider: pypi
+      username: '__token__'
+      password:
+        secure: "JSqTFoIJVjCqFc61n0I8evZ+vhqS14pwIpXeAU9Um1tHEmZW9J7/WgDWNxFar1dL9U6yopvSznB1sWQVVdEA0EGsaK5NUQXXUypiMDBKAwR5jOdJYanZ6XT9SvBCdO8O585nTUMTPKUd40IbfT1v8KeYeaCNAGHVwHZE8NaCsbwdVjT4whflaVX2SuliJubnMME4DWx6Fd+zi2zhmsA0WdOx6susDmLBMZtYU5208zM5sNNqTT1bIT6kvW8VHVmNejgaRd8Nvx43wGF51fFiMl4iexCOIX/6zhm2l7R11gASkPqLz7sPud+rVdOPKVjoXKprD4k+52oOmvPdRVO3YipAB5B8UWrExDntJo/LSmwyOGVcQS59bzdwX1IWbUXeWU5CCBmevKMgQj8Tgm1oC3XUC58/gDzQ0ACB+tJV2x7RIZTk7Scya+03iN6mFDYho6pYpT9qQJmg/ieKMgAkJ3gXBOp6ezUqlS3I2XNhsVaQKIx82ynBUTnxhtZZN+z8bztAwjAMk9xMZpfrzvxfpnifpuYfdVoFw4UCBqjLOD9Cqu+lRKlXOtP56Fwxjs9mrHdz9c5MmZqMXphi2b3sB4ApO4RytT3Tr/FFi9duXGG38fpgQFWuRyNat34labnJxznlSBYcMY/OTieAYe6NHzU8NqfTd5j/T4mH55ZLfAo="
+      on:
+        distributions: sdist bdist_wheel
+        repo: kirillsulim/panamap
