@@ -1,4 +1,5 @@
-from typing import Type, Any, TypeVar, Callable, Generic, List, Optional, Dict, Iterable, Set
+from typing import Type, Any, TypeVar, Callable, Generic, List, Optional, Dict, Iterable, Set, Union
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from inspect import signature
 
@@ -20,9 +21,14 @@ class MissingMappingException(MappingException):
         super(MissingMappingException, self).__init__(f"Mapping from '{l}' to '{r}' is not defined.")
 
 
+class ImproperlyConfiguredException(MappingException):
+    def __init__(self, l: Type, r: Type, error: str):
+        super(ImproperlyConfiguredException, self).__init__(f"Mapping from '{l}' to '{r}' is improperly configured: {error}")
+
+
 class FieldMappingException(MappingException):
     def __init__(self, l: Type, r: Type, l_field: str, r_field: str, error: str):
-        super(MappingException, self).__init__(f"Cannot map field '{l_field}' of type '{l}' to field '{r_field} of type '{r}' because of '{error}'")
+        super(MappingException, self).__init__(f"Cannot map field '{l_field}' of type '{l}' to field '{r_field} of type '{r}': '{error}'")
 
 
 L = TypeVar('L')
@@ -42,18 +48,80 @@ class FieldMapRule(Generic[L, R]):
     converter: Optional[Callable[[Any], Any]] = None
 
 
-def uncase(field_name: str) -> str:
-    return field_name.replace('_', '').lower()
-
-
-def to_uncase_dict(fields: Iterable[str]) -> Dict[str, str]:
-    return {uncase(field): field for field in fields}
-
-
-class CommonTypeDescriptor(Generic[T]):
+class MappingDescriptor(ABC, Generic[T]):
     def __init__(self, t: Type[T]):
+        self.type = t
+
+    @abstractmethod
+    def get_getter(self, field_name: str) -> Callable[[T], Any]:
+        """
+        Return setter for field name
+        """
+        pass
+
+    @abstractmethod
+    def get_setter(self, field_name: str) -> Callable[[Dict, Any], None]:
+        """
+        Return getter for filed name
+        """
+        pass
+
+    @abstractmethod
+    def get_constructor_args(self) -> Set[str]:
+        """
+        Return constructor args
+        """
+        pass
+
+    def is_constructor_arg(self, field_name: str) -> bool:
+        """
+        Checks if filed_name is constructor arg
+        """
+        return field_name in self.get_constructor_args()
+
+    @abstractmethod
+    def get_required_constructor_args(self) -> Set[str]:
+        """
+        Return required constructor args
+        """
+        pass
+
+    @abstractmethod
+    def get_declared_fields(self) -> Set[str]:
+        """
+        Return set of declared fields. Note that if filed is not declared it still can be supported.
+        Used in map_matching.
+        """
+        pass
+
+    @abstractmethod
+    def is_field_supported(self, field_name: str) -> bool:
+        """
+        Checks if field can be set
+        """
+        pass
+
+    @abstractmethod
+    def get_preferred_field_type(self, field_name: str) -> Type[Any]:
+        """
+        Returns filed type if available else Any
+        """
+        pass
+
+    @staticmethod
+    def uncase(field_name: str) -> str:
+        return field_name.replace('_', '').lower()
+
+    @staticmethod
+    def to_uncase_dict(fields: Iterable[str]) -> Dict[str, str]:
+        return {MappingDescriptor.uncase(field): field for field in fields}
+
+
+class CommonTypeMappingDescriptor(MappingDescriptor):
+    def __init__(self, t: Type[T]):
+        super(CommonTypeMappingDescriptor, self).__init__(t)
         self.constructor_parameters = signature(t.__init__).parameters
-        self.uncased_dict = to_uncase_dict(self.constructor_parameters.keys())
+        self.uncased_dict = self.to_uncase_dict(self.constructor_parameters.keys())
 
     def get_field_names(self, ignore_case: bool) -> Set[str]:
         if ignore_case:
@@ -80,9 +148,6 @@ class CommonTypeDescriptor(Generic[T]):
 
         return setter
 
-    def is_constructor_param(self, field_name) -> bool:
-        return field_name in self.constructor_parameters
-
     def get_field_type(self, field_name: str) -> Type[Any]:
         param = self.constructor_parameters.get(field_name)
         if param is not None:
@@ -90,14 +155,65 @@ class CommonTypeDescriptor(Generic[T]):
         else:
             return None
 
+    def get_preferred_field_type(self, field_name: str) -> Type[Any]:
+        param = self.constructor_parameters.get(field_name)
+        if param is not None:
+            return param.annotation
+        else:
+            return Any
+
+    def get_constructor_args(self) -> Set[str]:
+        return set(self.constructor_parameters.keys()).difference({'self'})
+
+    def get_required_constructor_args(self) -> Set[str]:
+        return {name for name, props in self.constructor_parameters.items() if props.default == props.empty}.difference({'self'})
+
+    def get_declared_fields(self) -> Set[str]:
+        return self.get_constructor_args()
+
+    def is_field_supported(self, field_name: str) -> bool:
+        return True
+
+
+class DictMappingDescriptor(MappingDescriptor):
+    def __init__(self, d: Type[Dict]):
+        super(DictMappingDescriptor, self).__init__(d)
+
+    def get_getter(self, field_name: str) -> Callable[[Dict], Any]:
+        def getter(d: Dict):
+            return g.get(field_name)
+
+        return getter
+
+    def get_setter(self, field_name: str) -> Callable[[Dict, Any], None]:
+        def setter(d: Dict, value: Any):
+            d[field_name] = value
+
+        return setter
+
+    def get_constructor_args(self) -> Set[str]:
+        return set()
+
+    def get_required_constructor_args(self) -> Set[str]:
+        return set()
+
+    def get_declared_fields(self) -> Set[str]:
+        return set()
+
+    def is_field_supported(self, field_name: str) -> bool:
+        return True
+
+    def get_preferred_field_type(self, field_name: str) -> Type[Any]:
+        return Any
+
 
 class MappingConfigFlow:
-    def __init__(self, mapper: 'Mapper', left: Type, right: Type):
+    def __init__(self, mapper: 'Mapper', left_descriptor: MappingDescriptor, right_descriptor: MappingDescriptor):
         self.mapper = mapper
-        self.left = left
-        self.left_descr = CommonTypeDescriptor(left)
-        self.right = right
-        self.right_descr = CommonTypeDescriptor(right)
+        self.left = left_descriptor.type
+        self.left_descriptor = left_descriptor
+        self.right = right_descriptor.type
+        self.right_descriptor = right_descriptor
 
         self.l_to_r_touched = False
         self.l_to_r_map_list: List[FieldMapRule] = []
@@ -106,29 +222,29 @@ class MappingConfigFlow:
         self.r_to_l_map_list: List[FieldMapRule] = []
 
     def l_to_r(self, l_field_name: str, r_field_name: str, converter: Callable[[Any], Any] = None) -> 'MappingConfigFlow':
-        lget = self.left_descr.get_getter(l_field_name)
-        ltype = self.left_descr.get_field_type(l_field_name)
+        left_getter = self.left_descriptor.get_getter(l_field_name)
+        left_field_type = self.left_descriptor.get_preferred_field_type(l_field_name)
 
-        rset = self.right_descr.get_setter(r_field_name)
-        rtype = self.right_descr.get_field_type(r_field_name)
+        right_setter = self.right_descriptor.get_setter(r_field_name)
+        right_field_type = self.right_descriptor.get_preferred_field_type(r_field_name)
 
-        if self.right_descr.is_constructor_param(r_field_name):
-            self.l_to_r_map_list.append(FieldMapRule(l_field_name, lget, r_field_name, True, None, converter=converter,
-                                                     from_field_type=ltype, to_field_type=rtype))
+        if self.right_descriptor.is_constructor_arg(r_field_name):
+            self.l_to_r_map_list.append(FieldMapRule(l_field_name, left_getter, r_field_name, True, None, converter=converter,
+                                                     from_field_type=left_field_type, to_field_type=right_field_type))
         else:
-            self.l_to_r_map_list.append(FieldMapRule(l_field_name, lget, r_field_name, False, rset, converter=converter,
-                                                     from_field_type=ltype, to_field_type=rtype))
+            self.l_to_r_map_list.append(FieldMapRule(l_field_name, left_getter, r_field_name, False, right_setter, converter=converter,
+                                                     from_field_type=left_field_type, to_field_type=right_field_type))
         self.l_to_r_touched = True
         return self
 
     def r_to_l(self, l_field_name: str, r_field_name: str, converter: Callable[[Any], Any] = None) -> 'MappingConfigFlow':
-        lset = self.left_descr.get_setter(l_field_name)
-        ltype = self.left_descr.get_field_type(l_field_name)
+        lset = self.left_descriptor.get_setter(l_field_name)
+        ltype = self.left_descriptor.get_preferred_field_type(l_field_name)
 
-        rget = self.right_descr.get_getter(r_field_name)
-        rtype = self.right_descr.get_field_type(r_field_name)
+        rget = self.right_descriptor.get_getter(r_field_name)
+        rtype = self.right_descriptor.get_preferred_field_type(r_field_name)
 
-        if self.left_descr.is_constructor_param(l_field_name):
+        if self.left_descriptor.is_constructor_arg(l_field_name):
             self.r_to_l_map_list.append(FieldMapRule(r_field_name, rget, l_field_name, True, None, converter=converter,
                                                      from_field_type=rtype, to_field_type=ltype))
         else:
@@ -143,10 +259,14 @@ class MappingConfigFlow:
         return self
 
     def l_to_r_empty(self):
+        if self.l_to_r_touched:
+            raise ImproperlyConfiguredException(self.left, self.right, 'empty mapping after another configuration')
         self.l_to_r_touched = True
         return self
 
     def r_to_l_empty(self):
+        if self.r_to_l_touched:
+            raise ImproperlyConfiguredException(self.left, self.right, 'empty mapping after another configuration')
         self.r_to_l_touched = True
         return self
 
@@ -156,14 +276,20 @@ class MappingConfigFlow:
         return self
 
     def map_matching(self, ignore_case: bool = False) -> 'MappingConfigFlow':
-        l_fields = self.left_descr.get_field_names(ignore_case)
-        r_fields = self.right_descr.get_field_names(ignore_case)
-        common_fields = l_fields.intersection(r_fields)
+
+        if ignore_case:
+            l_fields = MappingDescriptor.to_uncase_dict(self.left_descriptor.get_declared_fields())
+            r_fields = MappingDescriptor.to_uncase_dict(self.right_descriptor.get_declared_fields())
+        else:
+            l_fields = {f: f for f in self.left_descriptor.get_declared_fields()}
+            r_fields = {f: f for f in self.right_descriptor.get_declared_fields()}
+
+        common_fields = set(l_fields.keys()).intersection(r_fields.keys())
         for field in common_fields:
-            lf_name = self.left_descr.get_canonical_field_name(field)
+            lf_name = l_fields[field]
             if lf_name is None:
                 raise Exception(f"Not found canonical name for uncased '{field}' for class {self.left}")
-            rf_name = self.right_descr.get_canonical_field_name(field)
+            rf_name = r_fields[field]
             if rf_name is None:
                 raise Exception(f"Not found canonical name for uncased '{field}' for class {self.right}")
 
@@ -181,7 +307,11 @@ class Mapper:
     def __init__(self):
         self.map_rules: Dict[Type, Dict[Type, List[FieldMapRule]]] = {}
 
-    def mapping(self, a: Type, b: Type) -> MappingConfigFlow:
+    def mapping(self, a: Union[Type, MappingDescriptor], b: Union[Type, MappingDescriptor]) -> MappingConfigFlow:
+        if isinstance(a, Type):
+            a = CommonTypeMappingDescriptor(a)
+        if isinstance(b, Type):
+            b = CommonTypeMappingDescriptor(b)
         return MappingConfigFlow(self, a, b)
 
     def _add_map_rules(self, a: Type, b: Type, rules: List[FieldMapRule]):

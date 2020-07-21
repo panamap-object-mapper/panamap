@@ -1,16 +1,18 @@
 from unittest import TestCase
 
-from panamap import Mapper, MissingMappingException
+from panamap import Mapper, MissingMappingException, ImproperlyConfiguredException
+
+
+class A:
+    pass
+
+
+class B:
+    pass
 
 
 class TestMapEmptyClasses(TestCase):
     def test_map_empty_class_l_to_r(self):
-        class A:
-            pass
-
-        class B:
-            pass
-
         l_to_r_mapper = Mapper()
         l_to_r_mapper.mapping(A, B) \
             .l_to_r_empty() \
@@ -21,12 +23,6 @@ class TestMapEmptyClasses(TestCase):
         self.assertEqual(b.__class__, B)
 
     def test_map_empty_class_r_to_l(self):
-        class A:
-            pass
-
-        class B:
-            pass
-
         r_to_l_mapper = Mapper()
         r_to_l_mapper.mapping(A, B) \
             .r_to_l_empty() \
@@ -37,12 +33,6 @@ class TestMapEmptyClasses(TestCase):
         self.assertEqual(a.__class__, A)
 
     def test_map_empty_class_bidirectional(self):
-        class A:
-            pass
-
-        class B:
-            pass
-
         bi_d_mapper = Mapper()
         bi_d_mapper.mapping(A, B) \
             .bidirectional_empty() \
@@ -57,12 +47,6 @@ class TestMapEmptyClasses(TestCase):
         self.assertEqual(a.__class__, A)
 
     def test_raise_exception_when_reverse_map_is_not_set(self):
-        class A:
-            pass
-
-        class B:
-            pass
-
         mapper = Mapper()
         mapper.mapping(A, B) \
             .l_to_r_empty() \
@@ -70,3 +54,12 @@ class TestMapEmptyClasses(TestCase):
 
         with self.assertRaises(MissingMappingException):
             mapper.map(B(), A)
+
+    def test_raise_exception_when_empty_mapping_after_another_configuration(self):
+        mapper = Mapper()
+
+        with self.assertRaises(ImproperlyConfiguredException):
+            mapper.mapping(A, B) \
+                .l_to_r("a", "b") \
+                .l_to_r_empty() \
+                .register()
