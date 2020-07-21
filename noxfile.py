@@ -21,7 +21,8 @@ FLAKE8_IGNORE = [
 def unit_tests(session):
     session.install(".")
     session.install("pytest")
-    session.run("pytest", "tests")
+    session.install("coverage")
+    session.run("coverage", "run", "--source", "panamap", "-m", "pytest", "tests")
 
 
 @nox.session
