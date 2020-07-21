@@ -44,7 +44,7 @@ class TestMapToDict(TestCase):
 
         self.assertEqual(d, {"value": "def"})
 
-    def ignore_test_map_from_dict(self):
+    def test_map_from_dict(self):
         mapper = Mapper()
         mapper.mapping(A, dict) \
             .map_matching() \
