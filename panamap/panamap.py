@@ -413,7 +413,7 @@ class Mapper:
                     try:
                         return primitive_converter(rule.from_field_getter(b_obj))
                     except Exception as e:
-                        raise FieldMappingException(a, b, rule.from_field, rule.to_field, 'exception on mapping nesting class') from e
+                        raise FieldMappingException(a, b, rule.from_field, rule.to_field, 'exception on mapping primitive values') from e
 
                 getter = wrapped_getter
 
