@@ -108,6 +108,13 @@ class MappingDescriptor(ABC, Generic[T]):
         """
         pass
 
+    @abstractmethod
+    def is_container_type(self) -> bool:
+        """
+        Marks container types designed to store arbitrary fields
+        """
+        pass
+
     @staticmethod
     def uncase(field_name: str) -> str:
         return field_name.replace('_', '').lower()
@@ -174,6 +181,9 @@ class CommonTypeMappingDescriptor(MappingDescriptor):
     def is_field_supported(self, field_name: str) -> bool:
         return True
 
+    def is_container_type(self) -> bool:
+        return False
+
 
 class DictMappingDescriptor(MappingDescriptor):
     def __init__(self, d: Type[Dict]):
@@ -181,7 +191,7 @@ class DictMappingDescriptor(MappingDescriptor):
 
     def get_getter(self, field_name: str) -> Callable[[Dict], Any]:
         def getter(d: Dict):
-            return g.get(field_name)
+            return d.get(field_name)
 
         return getter
 
@@ -205,6 +215,9 @@ class DictMappingDescriptor(MappingDescriptor):
 
     def get_preferred_field_type(self, field_name: str) -> Type[Any]:
         return Any
+
+    def is_container_type(self) -> bool:
+        return True
 
 
 class MappingConfigFlow:
@@ -276,6 +289,10 @@ class MappingConfigFlow:
         return self
 
     def map_matching(self, ignore_case: bool = False) -> 'MappingConfigFlow':
+        if self.left_descriptor.is_container_type() and self.right_descriptor.is_container_type():
+            raise ImproperlyConfiguredException(self.left, self.right, 'map matching for two container types doesn\'t make sense')
+        if ignore_case and (self.left_descriptor.is_container_type() or self.right_descriptor.is_container_type()):
+            raise ImproperlyConfiguredException(self.left, self.right, 'map matching for container types with ignored case does not supported yet')
 
         if ignore_case:
             l_fields = MappingDescriptor.to_uncase_dict(self.left_descriptor.get_declared_fields())
@@ -284,15 +301,17 @@ class MappingConfigFlow:
             l_fields = {f: f for f in self.left_descriptor.get_declared_fields()}
             r_fields = {f: f for f in self.right_descriptor.get_declared_fields()}
 
-        common_fields = set(l_fields.keys()).intersection(r_fields.keys())
+        if self.left_descriptor.is_container_type():
+            common_fields = set(r_fields.keys())
+            l_fields = r_fields
+        elif self.right_descriptor.is_container_type():
+            common_fields = set(l_fields.keys())
+            r_fields = l_fields
+        else:
+            common_fields = set(l_fields.keys()).intersection(r_fields.keys())
         for field in common_fields:
             lf_name = l_fields[field]
-            if lf_name is None:
-                raise Exception(f"Not found canonical name for uncased '{field}' for class {self.left}")
             rf_name = r_fields[field]
-            if rf_name is None:
-                raise Exception(f"Not found canonical name for uncased '{field}' for class {self.right}")
-
             self.bidirectional(lf_name, rf_name)
         return self
 
@@ -309,9 +328,15 @@ class Mapper:
 
     def mapping(self, a: Union[Type, MappingDescriptor], b: Union[Type, MappingDescriptor]) -> MappingConfigFlow:
         if isinstance(a, Type):
-            a = CommonTypeMappingDescriptor(a)
+            if a is dict:
+                a = DictMappingDescriptor(a)
+            else:
+                a = CommonTypeMappingDescriptor(a)
         if isinstance(b, Type):
-            b = CommonTypeMappingDescriptor(b)
+            if b is dict:
+                b = DictMappingDescriptor(b)
+            else:
+                b = CommonTypeMappingDescriptor(b)
         return MappingConfigFlow(self, a, b)
 
     def _add_map_rules(self, a: Type, b: Type, rules: List[FieldMapRule]):

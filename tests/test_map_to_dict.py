@@ -2,7 +2,12 @@ from dataclasses import dataclass
 from typing import List
 from unittest import TestCase
 
-from panamap import Mapper
+from panamap import Mapper, ImproperlyConfiguredException
+
+
+@dataclass
+class Simple:
+    value: str
 
 
 @dataclass
@@ -17,7 +22,29 @@ class A:
 
 
 class TestMapToDict(TestCase):
-    def test_map_from_dict(self):
+    def test_raise_exception_on_mapping_dict_to_dict(self):
+        mapper = Mapper()
+        with self.assertRaises(ImproperlyConfiguredException):
+            mapper.mapping(dict, dict) \
+                .map_matching() \
+                .register()
+
+    def test_simple_map_to_dict(self):
+        mapper = Mapper()
+        mapper.mapping(Simple, dict) \
+            .map_matching() \
+            .register()
+
+        s = mapper.map({'value': "abc"}, Simple)
+
+        self.assertEqual(s.__class__, Simple)
+        self.assertEqual(s.value, "abc")
+
+        d = mapper.map(Simple("def"), dict)
+
+        self.assertEqual(d, {"value": "def"})
+
+    def ignore_test_map_from_dict(self):
         mapper = Mapper()
         mapper.mapping(A, dict) \
             .map_matching() \
