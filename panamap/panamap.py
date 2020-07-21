@@ -1,5 +1,5 @@
-from typing import Type, Any, TypeVar, Callable, Generic, List, Optional, Dict, Iterable, Set, Union
-from abc import ABC, abstractmethod, abstractclassmethod
+from typing import Type, Any, TypeVar, Callable, Generic, List, Optional, Dict, Iterable, Set, Union, Tuple
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from inspect import signature
 
@@ -341,6 +341,15 @@ class Mapper:
         CommonTypeMappingDescriptor,
     ]
 
+    PRIMITIVE_CONVERTERS: Dict[Tuple[Type[Any], Type[Any]], Callable[[Any], Any]] = {
+        (int, str): str,
+        (int, float): float,
+        (float, str): str,
+        (str, int): int,
+        (str, float): float,
+        (str, bytes): lambda s: s.encode('utf-8'),
+    }
+
     def __init__(self, custom_descriptors: Optional[List[Type[MappingDescriptor]]] = None):
         self.map_rules: Dict[Type, Dict[Type, List[FieldMapRule]]] = {}
         self.custom_descriptors = custom_descriptors if custom_descriptors else []
@@ -398,14 +407,26 @@ class Mapper:
 
                 getter = wrapped_getter
 
+            elif (from_type, to_type) in self.PRIMITIVE_CONVERTERS:
+                def wrapped_getter(b_obj: Type[T]) -> Any:
+                    primitive_converter = self.PRIMITIVE_CONVERTERS[(from_type, to_type)]
+                    try:
+                        return primitive_converter(rule.from_field_getter(b_obj))
+                    except Exception as e:
+                        raise FieldMappingException(a, b, rule.from_field, rule.to_field, 'exception on mapping nesting class') from e
+
+                getter = wrapped_getter
+
             if rule.to_field_is_constructor_arg:
                 constructor_args[rule.to_field] = getter(a_obj)
             else:
-                other_fields_operations.append(lambda l, r: setter(r, getter(l)))
+                value = getter(a_obj)
+                other_fields_operations.append((setter, value))
 
         b_obj = b(**constructor_args)
         for op in other_fields_operations:
-            op(a_obj, b_obj)
+            setter, value = op
+            setter(b_obj, value)
 
         return b_obj
 
