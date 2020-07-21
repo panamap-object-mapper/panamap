@@ -8,7 +8,7 @@ install:
 - python setup.py install
 before_script:
 - pip install nox
-- pip install python-coveralls
+- pip install coveralls
 script:
 - nox
 stages:

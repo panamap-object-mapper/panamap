@@ -21,7 +21,7 @@ FLAKE8_IGNORE = [
 def unit_tests(session):
     session.install(".")
     session.install("pytest")
-    session.install("coverage==4.5.4")
+    session.install("coverage")
     session.run("coverage", "run", "--source", "panamap", "-m", "pytest", "tests")
 
 
