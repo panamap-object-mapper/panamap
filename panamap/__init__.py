@@ -1,5 +1,11 @@
 import pkg_resources
-from panamap.panamap import Mapper, MappingException, MissingMappingException, ImproperlyConfiguredException, MappingDescriptor, UnsupportedFieldException
+from panamap.panamap import (  # noqa: F401
+    Mapper,
+    MappingException,
+    MissingMappingException,
+    ImproperlyConfiguredException,
+    MappingDescriptor,
+    UnsupportedFieldException,
+)
 
-__version__ = pkg_resources.resource_string(__name__, 'panamap.version').decode('utf-8').strip()
-
+__version__ = pkg_resources.resource_string(__name__, "panamap.version").decode("utf-8").strip()

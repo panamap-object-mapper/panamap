@@ -49,10 +49,6 @@ class CustomDescriptor(MappingDescriptor):
 
 class TestCustomDescriptors(TestCase):
     def test_custom_descriptor_loads(self):
-        mapper = Mapper(custom_descriptors=[
-            CustomDescriptor
-        ])
+        mapper = Mapper(custom_descriptors=[CustomDescriptor])
         with self.assertRaises(CustomDescriptorInitialized):
-            mapper.mapping(CustomDescriptorSpecialClass, dict) \
-                .map_matching() \
-                .register()
+            mapper.mapping(CustomDescriptorSpecialClass, dict).map_matching().register()

@@ -5,7 +5,6 @@ from panamap import Mapper
 
 
 class TestMapPrimitiveValues(TestCase):
-
     def test_map_int_to_str(self):
         @dataclass
         class A:
@@ -16,9 +15,7 @@ class TestMapPrimitiveValues(TestCase):
             value: str
 
         mapper = Mapper()
-        mapper.mapping(A, B) \
-            .map_matching() \
-            .register()
+        mapper.mapping(A, B).map_matching().register()
 
         b = mapper.map(A(123), B)
 

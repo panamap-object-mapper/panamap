@@ -14,12 +14,9 @@ class B:
 
 
 class TestMapPrimitiveClasses(TestCase):
-
     def test_map_primitive_class_l_to_r(self):
         l_to_r_mapper = Mapper()
-        l_to_r_mapper.mapping(A, B) \
-            .l_to_r("a_value", "b_value") \
-            .register()
+        l_to_r_mapper.mapping(A, B).l_to_r("a_value", "b_value").register()
 
         b = l_to_r_mapper.map(A(123), B)
 
@@ -28,9 +25,7 @@ class TestMapPrimitiveClasses(TestCase):
 
     def test_map_primitive_class_r_to_l(self):
         r_to_l_mapper = Mapper()
-        r_to_l_mapper.mapping(A, B) \
-            .r_to_l("a_value", "b_value") \
-            .register()
+        r_to_l_mapper.mapping(A, B).r_to_l("a_value", "b_value").register()
 
         a = r_to_l_mapper.map(B(456), A)
 
@@ -39,9 +34,7 @@ class TestMapPrimitiveClasses(TestCase):
 
     def test_map_primitive_class_bidirectional(self):
         bi_d_mapper = Mapper()
-        bi_d_mapper.mapping(A, B) \
-            .bidirectional("a_value", "b_value") \
-            .register()
+        bi_d_mapper.mapping(A, B).bidirectional("a_value", "b_value").register()
 
         b = bi_d_mapper.map(A(123), B)
 
@@ -55,10 +48,7 @@ class TestMapPrimitiveClasses(TestCase):
 
     def test_map_non_constructor_attributes(self):
         mapper = Mapper()
-        mapper.mapping(A, B) \
-            .l_to_r("a_value", "b_value") \
-            .l_to_r("additional_value", "additional_value") \
-            .register()
+        mapper.mapping(A, B).l_to_r("a_value", "b_value").l_to_r("additional_value", "additional_value").register()
 
         a = A(123)
         a.additional_value = 456

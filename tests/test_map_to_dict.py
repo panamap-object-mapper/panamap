@@ -25,17 +25,13 @@ class TestMapToDict(TestCase):
     def test_raise_exception_on_mapping_dict_to_dict(self):
         mapper = Mapper()
         with self.assertRaises(ImproperlyConfiguredException):
-            mapper.mapping(dict, dict) \
-                .map_matching() \
-                .register()
+            mapper.mapping(dict, dict).map_matching().register()
 
     def test_simple_map_to_dict(self):
         mapper = Mapper()
-        mapper.mapping(Simple, dict) \
-            .map_matching() \
-            .register()
+        mapper.mapping(Simple, dict).map_matching().register()
 
-        s = mapper.map({'value': "abc"}, Simple)
+        s = mapper.map({"value": "abc"}, Simple)
 
         self.assertEqual(s.__class__, Simple)
         self.assertEqual(s.value, "abc")
@@ -46,29 +42,10 @@ class TestMapToDict(TestCase):
 
     def test_map_from_dict(self):
         mapper = Mapper()
-        mapper.mapping(A, dict) \
-            .map_matching() \
-            .register()
-        mapper.mapping(Nested, dict) \
-            .map_matching() \
-            .register()
+        mapper.mapping(A, dict).map_matching().register()
+        mapper.mapping(Nested, dict).map_matching().register()
 
-        a = mapper.map(
-            {
-                'nested': {
-                    'value': "abc",
-                },
-                'list_of_nested': [
-                    {
-                        'value': "def",
-                    },
-                    {
-                        'value': "xyz",
-                    }
-                ]
-            },
-            A,
-        )
+        a = mapper.map({"nested": {"value": "abc",}, "list_of_nested": [{"value": "def",}, {"value": "xyz",}]}, A,)
 
         self.assertEqual(a.__class__, A)
         self.assertEqual(a.nested.__class__, Nested)

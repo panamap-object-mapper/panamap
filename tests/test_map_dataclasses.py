@@ -39,10 +39,7 @@ class OuterB:
 class TestMapDataclasses(TestCase):
     def test_map_matching_dataclasses(self):
         mapper = Mapper()
-        mapper.mapping(A, B) \
-            .bidirectional("a_value", "b_value") \
-            .map_matching() \
-            .register()
+        mapper.mapping(A, B).bidirectional("a_value", "b_value").map_matching().register()
 
         b = mapper.map(A("123", 456), B)
 
@@ -58,12 +55,8 @@ class TestMapDataclasses(TestCase):
 
     def test_map_nested_dataclasses(self):
         mapper = Mapper()
-        mapper.mapping(OuterA, OuterB) \
-            .map_matching() \
-            .register()
-        mapper.mapping(NestedA, NestedB) \
-            .map_matching() \
-            .register()
+        mapper.mapping(OuterA, OuterB).map_matching().register()
+        mapper.mapping(NestedA, NestedB).map_matching().register()
 
         b = mapper.map(OuterA(NestedA(123)), OuterB)
 

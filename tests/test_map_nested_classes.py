@@ -27,13 +27,9 @@ class B:
 class TestMapNestedClasses(TestCase):
     def test_map_nested_classes(self):
         mapper = Mapper()
-        mapper.mapping(A, B) \
-            .map_matching() \
-            .register()
+        mapper.mapping(A, B).map_matching().register()
 
-        mapper.mapping(NestedA, NestedB) \
-            .map_matching() \
-            .register()
+        mapper.mapping(NestedA, NestedB).map_matching().register()
 
         b = mapper.map(A(NestedA("abc")), B)
 

@@ -16,10 +16,7 @@ class TestMapMatching(TestCase):
                 self.common_value = common_value
 
         mapper = Mapper()
-        mapper.mapping(A, B) \
-            .bidirectional("a_value", "b_value") \
-            .map_matching() \
-            .register()
+        mapper.mapping(A, B).bidirectional("a_value", "b_value").map_matching().register()
 
         b = mapper.map(A(123, "456"), B)
 
@@ -45,10 +42,7 @@ class TestMapMatching(TestCase):
                 self.CommonValue = CommonValue
 
         mapper = Mapper()
-        mapper.mapping(A, B) \
-            .bidirectional("a_value", "b_value") \
-            .map_matching(ignore_case=True) \
-            .register()
+        mapper.mapping(A, B).bidirectional("a_value", "b_value").map_matching(ignore_case=True).register()
 
         b = mapper.map(A(123, "456"), B)
 

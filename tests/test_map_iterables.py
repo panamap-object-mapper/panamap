@@ -58,12 +58,8 @@ class TupleContainerB:
 class TestMapIterables(TestCase):
     def test_map_list(self):
         mapper = Mapper()
-        mapper.mapping(ContainerA, ContainerB) \
-            .map_matching() \
-            .register()
-        mapper.mapping(ValueA, ValueB) \
-            .map_matching() \
-            .register()
+        mapper.mapping(ContainerA, ContainerB).map_matching().register()
+        mapper.mapping(ValueA, ValueB).map_matching().register()
 
         b = mapper.map(ContainerA([ValueA("abc"), ValueA("def")]), ContainerB)
 
@@ -76,15 +72,9 @@ class TestMapIterables(TestCase):
 
     def test_map_tuple(self):
         mapper = Mapper()
-        mapper.mapping(TupleContainerA, TupleContainerB) \
-            .map_matching() \
-            .register()
-        mapper.mapping(FirstTupleValueA, FirstTupleValueB) \
-            .map_matching() \
-            .register()
-        mapper.mapping(SecondTupleValueA, SecondTupleValueB) \
-            .map_matching() \
-            .register()
+        mapper.mapping(TupleContainerA, TupleContainerB).map_matching().register()
+        mapper.mapping(FirstTupleValueA, FirstTupleValueB).map_matching().register()
+        mapper.mapping(SecondTupleValueA, SecondTupleValueB).map_matching().register()
 
         b = mapper.map(TupleContainerA((FirstTupleValueA("abc"), SecondTupleValueA("def"))), TupleContainerB)
 

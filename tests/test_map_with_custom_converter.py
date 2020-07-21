@@ -23,9 +23,7 @@ class TestMapWithCustomConverter(TestCase):
             return f"--{i}--"
 
         l_to_r_mapper = Mapper()
-        l_to_r_mapper.mapping(A, B) \
-            .l_to_r("a_value", "b_value", converter) \
-            .register()
+        l_to_r_mapper.mapping(A, B).l_to_r("a_value", "b_value", converter).register()
 
         b = l_to_r_mapper.map(A(123), B)
 
@@ -37,9 +35,7 @@ class TestMapWithCustomConverter(TestCase):
             return f"--{i}--"
 
         l_to_r_mapper = Mapper()
-        l_to_r_mapper.mapping(C, B) \
-            .l_to_r("c_value", "b_value", converter) \
-            .register()
+        l_to_r_mapper.mapping(C, B).l_to_r("c_value", "b_value", converter).register()
 
         c = C()
         c.c_value = 123
