@@ -30,6 +30,7 @@ setup(
     },
     test_suite='tests',
     install_requires=[
+        'typing_inspect',
     ],
     classifiers=[
         "Development Status :: 4 - Beta",

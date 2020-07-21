@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from inspect import signature
 
+from typing_inspect import get_origin, get_args
+
 
 T = TypeVar('T')
 
@@ -28,7 +30,7 @@ class ImproperlyConfiguredException(MappingException):
 
 class FieldMappingException(MappingException):
     def __init__(self, l: Type, r: Type, l_field: str, r_field: str, error: str):
-        super(MappingException, self).__init__(f"Cannot map field '{l_field}' of type '{l}' to field '{r_field} of type '{r}': '{error}'")
+        super(MappingException, self).__init__(f"Cannot map field '{l_field}' of type '{l}' to field '{r_field}' of type '{r}': '{error}'")
 
 
 L = TypeVar('L')
@@ -390,22 +392,84 @@ class Mapper:
             to_type = rule.to_field_type
 
             if converter is not None:
-                def wrapped_getter(b_obj: Type[T]) -> Any:
+                def wrapped_getter(t: Type[T]) -> Any:
                     try:
-                        return converter(rule.from_field_getter(b_obj))
+                        return converter(rule.from_field_getter(t))
                     except Exception as e:
                         raise FieldMappingException(a, b, rule.from_field, rule.to_field, 'exception on value conversion') from e
 
                 getter = wrapped_getter
 
             elif self._has_mapping(from_type, to_type):
-                def wrapped_getter(b_obj: Type[T]) -> Any:
+                def wrapped_getter(t: Type[T]) -> Any:
                     try:
-                        return self.map(rule.from_field_getter(b_obj), to_type)
+                        return self.map(rule.from_field_getter(t), to_type)
                     except Exception as e:
                         raise FieldMappingException(a, b, rule.from_field, rule.to_field, 'exception on mapping nesting class') from e
 
                 getter = wrapped_getter
+
+            elif self._is_iterable(from_type) and self._is_iterable(to_type):
+                args = get_args(to_type)
+                if len(args) == 0:
+                    from_type = get_origin(from_type)
+                    to_type = get_origin(to_type)
+
+                    def wrapped_getter(t: Type[T]) -> Any:
+                        try:
+                            return to_type(*rule.from_field_getter(t))
+                        except Exception as e:
+                            raise FieldMappingException(a, b, rule.from_field, rule.to_field, 'exception on mapping iterable') from e
+
+                    getter = wrapped_getter
+
+                elif len(args) == 1:
+                    from_type = get_origin(from_type)
+                    to_type = get_origin(to_type)
+                    to_type_item = args[0]
+
+                    def wrapped_getter(t: Type[T]) -> Any:
+                        try:
+                            mapped_list = []
+                            for index, item in enumerate(rule.from_field_getter(t)):
+                                from_type_item = item.__class__
+                                if self._has_mapping(from_type_item, to_type_item):
+                                    mapped_list.append(self.map(item, to_type_item))
+                                elif (from_type_item, to_type_item) in self.PRIMITIVE_CONVERTERS:
+                                    mapped_list.append(self.PRIMITIVE_CONVERTERS[(from_type, to_type)](item))
+                                else:
+                                    raise FieldMappingException(a, b, rule.from_field, rule.to_field, f'unknown mapping of iterable item at index {index}')
+
+                            return to_type(mapped_list)
+                        except Exception as e:
+                            raise FieldMappingException(a, b, rule.from_field, rule.to_field,
+                                                        'exception on mapping iterable') from e
+
+                    getter = wrapped_getter
+
+                else:
+                    from_type = get_origin(from_type)
+                    to_type = get_origin(to_type)
+
+                    def wrapped_getter(t: Type[T]) -> Any:
+                        try:
+                            mapped_list = []
+                            for index, item in enumerate(rule.from_field_getter(t)):
+                                to_type_item = args[index]
+                                from_type_item = item.__class__
+                                if self._has_mapping(from_type_item, to_type_item):
+                                    mapped_list.append(self.map(item, to_type_item))
+                                elif (from_type_item, to_type_item) in self.PRIMITIVE_CONVERTERS:
+                                    mapped_list.append(self.PRIMITIVE_CONVERTERS[(from_type, to_type)](item))
+                                else:
+                                    raise FieldMappingException(a, b, rule.from_field, rule.to_field, f'unknown mapping of iterable item at index {index}')
+
+                            return to_type(mapped_list)
+                        except Exception as e:
+                            raise FieldMappingException(a, b, rule.from_field, rule.to_field,
+                                                        'exception on mapping iterable') from e
+
+                    getter = wrapped_getter
 
             elif (from_type, to_type) in self.PRIMITIVE_CONVERTERS:
                 def wrapped_getter(b_obj: Type[T]) -> Any:
@@ -432,3 +496,8 @@ class Mapper:
 
     def _has_mapping(self, a: Type[Any], b: Type[Any]) -> bool:
         return a in self.map_rules and b in self.map_rules[a]
+
+    @staticmethod
+    def _is_iterable(t: Type[Any]):
+        origin = get_origin(t)
+        return origin in [list, set, tuple]
