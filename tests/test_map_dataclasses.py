@@ -16,6 +16,26 @@ class B:
     common_value: int
 
 
+@dataclass
+class NestedA:
+    value: int
+
+
+@dataclass
+class OuterA:
+    nested: NestedA
+
+
+@dataclass
+class NestedB:
+    value: int
+
+
+@dataclass
+class OuterB:
+    nested: NestedB
+
+
 class TestMapDataclasses(TestCase):
     def test_map_matching_dataclasses(self):
         mapper = Mapper()
@@ -35,3 +55,18 @@ class TestMapDataclasses(TestCase):
         self.assertEqual(a.__class__, A)
         self.assertEqual(a.a_value, "xyz")
         self.assertEqual(a.common_value, 789)
+
+    def test_map_nested_dataclasses(self):
+        mapper = Mapper()
+        mapper.mapping(OuterA, OuterB) \
+            .map_matching() \
+            .register()
+        mapper.mapping(NestedA, NestedB) \
+            .map_matching() \
+            .register()
+
+        b = mapper.map(OuterA(NestedA(123)), OuterB)
+
+        self.assertEqual(b.__class__, OuterB)
+        self.assertEqual(b.nested.__class__, NestedB)
+        self.assertEqual(b.nested.value, 123)

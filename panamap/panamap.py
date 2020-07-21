@@ -1,5 +1,5 @@
 from typing import Type, Any, TypeVar, Callable, Generic, List, Optional, Dict, Iterable, Set, Union
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractclassmethod
 from dataclasses import dataclass
 from inspect import signature
 
@@ -51,6 +51,11 @@ class FieldMapRule(Generic[L, R]):
 class MappingDescriptor(ABC, Generic[T]):
     def __init__(self, t: Type[T]):
         self.type = t
+
+    @classmethod
+    @abstractmethod
+    def supports_type(cls, t: Type[Any]) -> bool:
+        pass
 
     @abstractmethod
     def get_getter(self, field_name: str) -> Callable[[T], Any]:
@@ -130,6 +135,10 @@ class CommonTypeMappingDescriptor(MappingDescriptor):
         self.constructor_parameters = signature(t.__init__).parameters
         self.uncased_dict = self.to_uncase_dict(self.constructor_parameters.keys())
 
+    @classmethod
+    def supports_type(cls, t: Type[Any]) -> bool:
+        return True
+
     def get_field_names(self, ignore_case: bool) -> Set[str]:
         if ignore_case:
             return set(self.uncased_dict.keys()).difference({'self'})
@@ -188,6 +197,10 @@ class CommonTypeMappingDescriptor(MappingDescriptor):
 class DictMappingDescriptor(MappingDescriptor):
     def __init__(self, d: Type[Dict]):
         super(DictMappingDescriptor, self).__init__(d)
+
+    @classmethod
+    def supports_type(cls, t: Type[Any]) -> bool:
+        return t is dict
 
     def get_getter(self, field_name: str) -> Callable[[Dict], Any]:
         def getter(d: Dict):
@@ -323,21 +336,28 @@ class MappingConfigFlow:
 
 
 class Mapper:
-    def __init__(self):
+    DEFAULT_DESCRIPTORS: List[Type[MappingDescriptor]] = [
+        DictMappingDescriptor,
+        CommonTypeMappingDescriptor,
+    ]
+
+    def __init__(self, custom_descriptors: Optional[List[Type[MappingDescriptor]]] = None):
         self.map_rules: Dict[Type, Dict[Type, List[FieldMapRule]]] = {}
+        self.custom_descriptors = custom_descriptors if custom_descriptors else []
 
     def mapping(self, a: Union[Type, MappingDescriptor], b: Union[Type, MappingDescriptor]) -> MappingConfigFlow:
         if isinstance(a, Type):
-            if a is dict:
-                a = DictMappingDescriptor(a)
-            else:
-                a = CommonTypeMappingDescriptor(a)
+            a = self._wrap_type_to_descriptor(a)
         if isinstance(b, Type):
-            if b is dict:
-                b = DictMappingDescriptor(b)
-            else:
-                b = CommonTypeMappingDescriptor(b)
+            b = self._wrap_type_to_descriptor(b)
         return MappingConfigFlow(self, a, b)
+
+    def _wrap_type_to_descriptor(self, t: Type[Any]):
+        for d in self.custom_descriptors + self.DEFAULT_DESCRIPTORS:
+            if d.supports_type(t):
+                return d(t)
+        else:
+            raise Exception(f"Cannot found descriptor for type '{t}'")
 
     def _add_map_rules(self, a: Type, b: Type, rules: List[FieldMapRule]):
         a_type_mappings = self.map_rules.setdefault(a, {})
