@@ -439,7 +439,6 @@ class Mapper:
         fields = []
 
         for rule in self.map_rules[a][b]:
-            # TODO: fix stubs
             fields_exc_info = FieldMappingExceptionInfo(
                 rule.from_field.type,
                 rule.to_field.type,
