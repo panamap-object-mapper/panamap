@@ -1,7 +1,8 @@
 from dataclasses import dataclass
+from typing import Optional
 from unittest import TestCase
 
-from panamap import Mapper
+from panamap import Mapper, MissingMappingException
 
 
 @dataclass
@@ -36,6 +37,16 @@ class OuterB:
     nested: NestedB
 
 
+@dataclass
+class StringCarrier:
+    value: str
+
+
+@dataclass
+class OptionalStringCarrier:
+    value: Optional[str]
+
+
 class TestMapDataclasses(TestCase):
     def test_map_matching_dataclasses(self):
         mapper = Mapper()
@@ -63,3 +74,18 @@ class TestMapDataclasses(TestCase):
         self.assertEqual(b.__class__, OuterB)
         self.assertEqual(b.nested.__class__, NestedB)
         self.assertEqual(b.nested.value, 123)
+
+    def test_map_optional_value(self):
+        mapper = Mapper()
+        mapper.mapping(StringCarrier, OptionalStringCarrier).map_matching().register()
+
+        b = mapper.map(StringCarrier("123"), OptionalStringCarrier)
+
+        self.assertEqual(b.value, "123")
+
+        a = mapper.map(OptionalStringCarrier("456"), StringCarrier)
+
+        self.assertEqual(a.value, "456")
+
+        with self.assertRaises(MissingMappingException):
+            mapper.map(OptionalStringCarrier(None), StringCarrier)

@@ -30,7 +30,12 @@ def style(session):
     session.install("flake8", "black", "isort")
 
     session.run("black", "--version")
-    session.run("black", "--check", "--target-version", "py38", "--line-length", f"{LINE_LENGTH}", *STYLE_TARGETS)
+    black_command = ["black", "--check", "--target-version", "py38", "--line-length", f"{LINE_LENGTH}", *STYLE_TARGETS]
+    try:
+        session.run(*black_command)
+    except Exception as e:
+        session.log("Black check failed. To fix style run:\n" + " ".join((black_command[:1] + black_command[2:])))
+        raise e
 
     session.run("flake8", "--version")
     session.run(
