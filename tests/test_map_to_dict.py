@@ -21,6 +21,11 @@ class A:
     list_of_nested: List[Nested]
 
 
+@dataclass
+class SimpleWithDefaultValue:
+    value: str = "Default value"
+
+
 class TestMapToDict(TestCase):
     def test_raise_exception_on_mapping_dict_to_dict(self):
         mapper = Mapper()
@@ -54,3 +59,10 @@ class TestMapToDict(TestCase):
         self.assertEqual(a.list_of_nested[0].__class__, Nested)
         self.assertEqual(a.list_of_nested[0].value, "def")
         self.assertEqual(a.list_of_nested[1].value, "xyz")
+
+    def test_map_missing_value_to_default(self):
+        mapper = Mapper()
+        mapper.mapping(SimpleWithDefaultValue, dict).map_matching().register()
+
+        a = mapper.map({}, SimpleWithDefaultValue)
+        self.assertEqual(a.value, "Default value")

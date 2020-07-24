@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 from unittest import TestCase
 
-from panamap import Mapper
+from panamap import Mapper, MissingMappingException
 
 
 @dataclass
@@ -82,3 +82,10 @@ class TestMapDataclasses(TestCase):
         b = mapper.map(StringCarrier("123"), OptionalStringCarrier)
 
         self.assertEqual(b.value, "123")
+
+        a = mapper.map(OptionalStringCarrier("456"), StringCarrier)
+
+        self.assertEqual(a.value, "456")
+
+        with self.assertRaises(MissingMappingException):
+            mapper.map(OptionalStringCarrier(None), StringCarrier)

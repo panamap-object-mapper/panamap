@@ -43,9 +43,16 @@ class MappingException(Exception):
         if hasattr(t, "__name__"):
             return t.__name__
         else:
-            origin_name = get_origin(t)._name
+            origin = get_origin(t)
+            if origin:
+                name = origin._name
+            else:
+                name = t._name
             args = list(map(lambda x: MappingException._get_type_name(x), get_args(t)))
-            return f"{origin_name}[{', '.join(args)}]"
+            if len(args) != 0:
+                return f"{name}[{', '.join(args)}]"
+            else:
+                return name
 
     @staticmethod
     def _get_filed_name(fields_chain: List[str]):
@@ -58,8 +65,12 @@ class DuplicateMappingException(MappingException):
 
 
 class MissingMappingException(MappingException):
-    def __init__(self, exc_info: MappingExceptionInfo):
-        super(MissingMappingException, self).__init__("Mapping is not defined.", exc_info)
+    def __init__(self, exc_info: MappingExceptionInfo, a: Type, b: Type):
+        a_name = MappingException._get_type_name(a)
+        b_name = MappingException._get_type_name(b)
+        super(MissingMappingException, self).__init__(
+            f"Mapping from type '{a_name}' to type '{b_name}' is not defined.", exc_info
+        )
 
 
 class ImproperlyConfiguredException(MappingException):
@@ -88,6 +99,7 @@ class FieldDescriptor(Generic[T, F]):
     getter: Callable[[T], F]
     setter: Optional[Callable[[T, F], None]]
     is_constructor_arg: bool
+    is_required_constructor_arg: bool
 
 
 T1 = TypeVar("T1")
@@ -121,6 +133,7 @@ class MappingDescriptor(ABC, Generic[T]):
                 getter=self.get_getter(field_name),
                 setter=self.get_setter(field_name),
                 is_constructor_arg=self.is_constructor_arg(field_name),
+                is_required_constructor_arg=self.is_required_constructor_arg(field_name),
             )
         else:
             return None
@@ -158,6 +171,12 @@ class MappingDescriptor(ABC, Generic[T]):
         Return required constructor args
         """
         pass
+
+    def is_required_constructor_arg(self, field_name: str) -> bool:
+        """
+        Checks if field_name is required constructor arg
+        """
+        return field_name in self.get_required_constructor_args()
 
     @abstractmethod
     def get_declared_fields(self) -> Set[str]:
@@ -470,7 +489,7 @@ class Mapper:
         elif self._is_direct_assignment_possible(a, b):
             return deepcopy(a_obj)
         else:
-            raise MissingMappingException(MappingExceptionInfo(a, b))
+            raise MissingMappingException(exc_info, a, b)
 
     def _has_mapping(self, a: Type[Any], b: Type[Any]) -> bool:
         return a in self.map_rules and b in self.map_rules[a]
@@ -488,13 +507,17 @@ class Mapper:
                 exc_info.a_fields_chain + [rule.from_field.name],
                 exc_info.b_fields_chain + [rule.to_field.name],
             )
+            field_value = rule.from_field.getter(a_obj)
+            if field_value is None and not rule.to_field.is_required_constructor_arg:
+                continue
+
             if rule.converter is not None:
                 try:
-                    value = rule.converter(rule.from_field.getter(a_obj))
+                    value = rule.converter(field_value)
                 except Exception as e:
                     raise FieldMappingException(fields_exc_info, "Error on value conversion") from e
             else:
-                value = self.map(rule.from_field.getter(a_obj), rule.to_field.type, fields_exc_info)
+                value = self.map(field_value, rule.to_field.type, fields_exc_info)
 
             if rule.to_field.is_constructor_arg:
                 constructor_args[rule.to_field.name] = value
