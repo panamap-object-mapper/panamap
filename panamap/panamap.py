@@ -573,7 +573,7 @@ class Mapper:
         args = get_args(b)
         if len(args) == 0:
             # Iterable without type
-            to_type = self.get_origin(b)
+            to_type = get_origin(b)
 
             try:
                 return to_type(*a_obj)
