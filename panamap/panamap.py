@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from inspect import signature
 from copy import deepcopy
 
-from typing_inspect import get_origin, get_args, is_union_type
+from typing_inspect import get_origin, get_args, is_union_type, is_forward_ref
 
 
 @dataclass
@@ -113,7 +113,6 @@ class FieldMapRule(Generic[T1, F1, T2, F2]):
     from_field: FieldDescriptor[T1, F1]
     to_field: FieldDescriptor[T2, F2]
     converter: Optional[Callable[[F1], F2]]
-    check_types: bool
 
 
 class MappingDescriptor(ABC, Generic[T]):
@@ -337,7 +336,7 @@ class MappingConfigFlow:
         self.r_to_l_map_list: List[FieldMapRule] = []
 
     def l_to_r(
-        self, left_field_name: str, right_field_name: str, converter: Callable[[Any], Any] = None, check_types=True
+        self, left_field_name: str, right_field_name: str, converter: Callable[[Any], Any] = None
     ) -> "MappingConfigFlow":
         left_field = self.left_descriptor.get_field_descriptor(left_field_name)
         if left_field is None:
@@ -347,14 +346,12 @@ class MappingConfigFlow:
         if right_field is None:
             raise UnsupportedFieldException(self.right_descriptor.type, right_field_name)
 
-        self.l_to_r_map_list.append(
-            FieldMapRule(from_field=left_field, to_field=right_field, converter=converter, check_types=check_types)
-        )
+        self.l_to_r_map_list.append(FieldMapRule(from_field=left_field, to_field=right_field, converter=converter))
         self.l_to_r_touched = True
         return self
 
     def r_to_l(
-        self, left_field_name: str, right_field_name: str, converter: Callable[[Any], Any] = None, check_types=True
+        self, left_field_name: str, right_field_name: str, converter: Callable[[Any], Any] = None
     ) -> "MappingConfigFlow":
         left_field = self.left_descriptor.get_field_descriptor(left_field_name)
         if left_field is None:
@@ -364,15 +361,13 @@ class MappingConfigFlow:
         if right_field is None:
             raise UnsupportedFieldException(self.right_descriptor.type, right_field_name)
 
-        self.r_to_l_map_list.append(
-            FieldMapRule(from_field=right_field, to_field=left_field, converter=converter, check_types=check_types)
-        )
+        self.r_to_l_map_list.append(FieldMapRule(from_field=right_field, to_field=left_field, converter=converter))
         self.r_to_l_touched = True
         return self
 
-    def bidirectional(self, l_field_name: str, r_field_name: str, check_types=True) -> "MappingConfigFlow":
-        self.l_to_r(l_field_name, r_field_name, check_types=check_types)
-        self.r_to_l(l_field_name, r_field_name, check_types=check_types)
+    def bidirectional(self, l_field_name: str, r_field_name: str) -> "MappingConfigFlow":
+        self.l_to_r(l_field_name, r_field_name)
+        self.r_to_l(l_field_name, r_field_name)
         return self
 
     def l_to_r_empty(self):
@@ -396,7 +391,7 @@ class MappingConfigFlow:
         self.l_to_r_empty()
         return self
 
-    def map_matching(self, ignore_case: bool = False, check_types=True) -> "MappingConfigFlow":
+    def map_matching(self, ignore_case: bool = False) -> "MappingConfigFlow":
         if self.left_descriptor.is_container_type() and self.right_descriptor.is_container_type():
             raise ImproperlyConfiguredException(
                 MappingExceptionInfo(self.left, self.right), "map matching for two container types doesn't make sense"
@@ -425,7 +420,7 @@ class MappingConfigFlow:
         for f in common_fields:
             lf_name = l_fields[f]
             rf_name = r_fields[f]
-            self.bidirectional(lf_name, rf_name, check_types=check_types)
+            self.bidirectional(lf_name, rf_name)
         return self
 
     def register(self) -> None:
@@ -453,6 +448,7 @@ class Mapper:
     def __init__(self, custom_descriptors: Optional[List[Type[MappingDescriptor]]] = None):
         self.map_rules: Dict[Type, Dict[Type, List[FieldMapRule]]] = {}
         self.custom_descriptors = custom_descriptors if custom_descriptors else []
+        self.forward_ref_dict: Dict[str, Type[Any]] = {}
 
     def mapping(self, a: Union[Type, MappingDescriptor], b: Union[Type, MappingDescriptor]) -> MappingConfigFlow:
         if isinstance(a, Type):
@@ -474,6 +470,31 @@ class Mapper:
             raise DuplicateMappingException(a, b)
 
         a_type_mappings[b] = rules
+        self._add_class_to_forward_ref_dict(a)
+        self._add_class_to_forward_ref_dict(b)
+
+    def _add_class_to_forward_ref_dict(self, t: Type):
+        if hasattr(t, "__name__"):
+            name = t.__name__
+            if name in self.forward_ref_dict and t != self.forward_ref_dict[name]:
+                raise Exception(
+                    f"Conflicting forward references '{name}'. Rearrange your class definitions or use type aliases."
+                )
+            else:
+                self.forward_ref_dict[name] = t
+
+    def _resolve_forward_ref(self, t: Type[Any]):
+        if isinstance(t, str) or is_forward_ref(t):
+            if isinstance(t, str):
+                name = t
+            else:
+                name = get_args(t)[0]
+            if name in self.forward_ref_dict:
+                return self.forward_ref_dict[name]
+            else:
+                raise Exception(f"Unknown forward reference '{name}'")
+        else:
+            return t
 
     def map(self, a_obj: Any, b: Type[T], exc_info: Optional[MappingExceptionInfo] = None) -> T:
         a = a_obj.__class__
@@ -501,9 +522,11 @@ class Mapper:
         fields = []
 
         for rule in self.map_rules[a][b]:
+            from_field_type = self._resolve_forward_ref(rule.from_field.type)
+            to_field_type = self._resolve_forward_ref(rule.to_field.type)
             fields_exc_info = MappingExceptionInfo(
-                rule.from_field.type,
-                rule.to_field.type,
+                from_field_type,
+                to_field_type,
                 exc_info.a_fields_chain + [rule.from_field.name],
                 exc_info.b_fields_chain + [rule.to_field.name],
             )
@@ -517,7 +540,7 @@ class Mapper:
                 except Exception as e:
                     raise FieldMappingException(fields_exc_info, "Error on value conversion") from e
             else:
-                value = self.map(field_value, rule.to_field.type, fields_exc_info)
+                value = self.map(field_value, to_field_type, fields_exc_info)
 
             if rule.to_field.is_constructor_arg:
                 constructor_args[rule.to_field.name] = value
@@ -546,6 +569,7 @@ class Mapper:
         return self._is_iterable(a) and self._is_iterable(b)
 
     def _map_iterables(self, a_obj: Any, b: Type[Any], exc_info: MappingExceptionInfo):
+        b = self._resolve_forward_ref(b)
         args = get_args(b)
         if len(args) == 0:
             # Iterable without type
@@ -559,7 +583,7 @@ class Mapper:
         elif len(args) == 1:
             # Iterable with type
             to_type = get_origin(b)
-            to_type_item = args[0]
+            to_type_item = self._resolve_forward_ref(args[0])
 
             mapped_list = []
             for index, item in enumerate(a_obj):
@@ -575,7 +599,7 @@ class Mapper:
 
             mapped_list = []
             for index, item in enumerate(a_obj):
-                to_type_item = args[index]
+                to_type_item = self._resolve_forward_ref(args[index])
 
                 try:
                     mapped_list.append(self.map(item, to_type_item))

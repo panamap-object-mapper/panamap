@@ -47,6 +47,16 @@ class OptionalStringCarrier:
     value: Optional[str]
 
 
+@dataclass
+class ForwardRefCarrier:
+    value: "ForwardReferenced"
+
+
+@dataclass
+class ForwardReferenced:
+    value: str
+
+
 class TestMapDataclasses(TestCase):
     def test_map_matching_dataclasses(self):
         mapper = Mapper()
@@ -89,3 +99,14 @@ class TestMapDataclasses(TestCase):
 
         with self.assertRaises(MissingMappingException):
             mapper.map(OptionalStringCarrier(None), StringCarrier)
+
+    def test_forward_ref_resolving(self):
+        mapper = Mapper()
+        mapper.mapping(ForwardRefCarrier, dict).map_matching().register()
+        mapper.mapping(ForwardReferenced, dict).map_matching().register()
+
+        a = mapper.map({"value": {"value": "abc"}}, ForwardRefCarrier)
+
+        self.assertEqual(a.__class__, ForwardRefCarrier)
+        self.assertEqual(a.value.__class__, ForwardReferenced)
+        self.assertEqual(a.value.value, "abc")

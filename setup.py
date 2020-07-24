@@ -24,6 +24,11 @@ setup(
     package_data={"panamap": ["panamap.version",]},
     test_suite="tests",
     install_requires=["typing_inspect",],
-    classifiers=["Development Status :: 4 - Beta", "License :: OSI Approved :: MIT License",],
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "License :: OSI Approved :: MIT License",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+    ],
     keywords="object mapper",
 )
