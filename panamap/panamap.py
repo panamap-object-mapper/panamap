@@ -2,8 +2,9 @@ from typing import Type, Any, TypeVar, Callable, Generic, List, Optional, Dict, 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from inspect import signature
+from copy import deepcopy
 
-from typing_inspect import get_origin, get_args
+from typing_inspect import get_origin, get_args, is_union_type
 
 
 @dataclass
@@ -28,7 +29,10 @@ class MappingException(Exception):
                 a_field_name = self._get_filed_name(exc_info.a_fields_chain)
                 b_field_name = self._get_filed_name(exc_info.b_fields_chain)
 
-                message = f"Cannot map field '{a_field_name}' of type '{a_name}' to field '{b_field_name}' of type '{b_name}': {error_description}"
+                message = (
+                    f"Cannot map field '{a_field_name}' of type '{a_name}' "
+                    f"to field '{b_field_name}' of type '{b_name}': {error_description}"
+                )
             else:
                 message = f"Cannot map type '{a_name}' to type '{b_name}': {error_description}"
 
@@ -36,18 +40,16 @@ class MappingException(Exception):
 
     @staticmethod
     def _get_type_name(t: Type) -> str:
-        if hasattr(t, '__name__'):
+        if hasattr(t, "__name__"):
             return t.__name__
         else:
             origin_name = get_origin(t)._name
             args = list(map(lambda x: MappingException._get_type_name(x), get_args(t)))
             return f"{origin_name}[{', '.join(args)}]"
 
-
-
     @staticmethod
     def _get_filed_name(fields_chain: List[str]):
-        return '.'.join(fields_chain)
+        return ".".join(fields_chain)
 
 
 class DuplicateMappingException(MappingException):
@@ -57,7 +59,7 @@ class DuplicateMappingException(MappingException):
 
 class MissingMappingException(MappingException):
     def __init__(self, exc_info: MappingExceptionInfo):
-        super(MissingMappingException, self).__init__(f"Mapping is not defined.", exc_info)
+        super(MissingMappingException, self).__init__("Mapping is not defined.", exc_info)
 
 
 class ImproperlyConfiguredException(MappingException):
@@ -356,13 +358,17 @@ class MappingConfigFlow:
 
     def l_to_r_empty(self):
         if self.l_to_r_touched:
-            raise ImproperlyConfiguredException(MappingExceptionInfo(self.left, self.right), "empty mapping after another configuration")
+            raise ImproperlyConfiguredException(
+                MappingExceptionInfo(self.left, self.right), "empty mapping after another configuration"
+            )
         self.l_to_r_touched = True
         return self
 
     def r_to_l_empty(self):
         if self.r_to_l_touched:
-            raise ImproperlyConfiguredException(MappingExceptionInfo(self.left, self.right), "empty mapping after another configuration")
+            raise ImproperlyConfiguredException(
+                MappingExceptionInfo(self.left, self.right), "empty mapping after another configuration"
+            )
         self.r_to_l_touched = True
         return self
 
@@ -378,7 +384,8 @@ class MappingConfigFlow:
             )
         if ignore_case and (self.left_descriptor.is_container_type() or self.right_descriptor.is_container_type()):
             raise ImproperlyConfiguredException(
-                MappingExceptionInfo(self.left, self.right), "map matching for container types with ignored case does not supported yet"
+                MappingExceptionInfo(self.left, self.right),
+                "map matching for container types with ignored case does not supported yet",
             )
 
         if ignore_case:
@@ -454,14 +461,14 @@ class Mapper:
         if exc_info is None:
             exc_info = MappingExceptionInfo(a, b)
 
-        if a == b or b is Any:
-            return a_obj
-        elif self._has_mapping(a, b):
+        if self._has_mapping(a, b):
             return self._map_with_map_rules(a_obj, b, exc_info)
         elif self._is_iterable_mapping_possible(a, b):
             return self._map_iterables(a_obj, b, exc_info)
         elif self._has_primitive_mapping(a, b):
             return self._map_primitives(a_obj, b, exc_info)
+        elif self._is_direct_assignment_possible(a, b):
+            return deepcopy(a_obj)
         else:
             raise MissingMappingException(MappingExceptionInfo(a, b))
 
@@ -553,6 +560,15 @@ class Mapper:
                     raise FieldMappingException(exc_info, f"Error on mapping iterable at index {index}") from e
 
             return to_type(mapped_list)
+
+    def _is_direct_assignment_possible(self, a: Type[Any], b: Type[Any]) -> bool:
+        if b is Any:
+            return True
+        elif is_union_type(b):
+            return any([self._is_direct_assignment_possible(a, t) for t in get_args(b)])
+        elif issubclass(a, b):
+            return True
+        return False
 
     @staticmethod
     def _is_iterable(t: Type[Any]):
