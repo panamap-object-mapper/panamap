@@ -6,12 +6,8 @@ from inspect import signature
 from typing_inspect import get_origin, get_args
 
 
-class MappingException(Exception):
-    pass
-
-
 @dataclass
-class FieldMappingExceptionInfo:
+class MappingExceptionInfo:
     a: Type[Any]
     b: Type[Any]
     a_fields_chain: List[str] = field(default_factory=list)
@@ -21,25 +17,52 @@ class FieldMappingExceptionInfo:
         return 0 < len(self.a_fields_chain) or 0 < len(self.b_fields_chain)
 
 
+class MappingException(Exception):
+    def __init__(self, error_description: str, exc_info: Optional[MappingExceptionInfo] = None):
+        if exc_info is None:
+            message = error_description
+        else:
+            a_name = self._get_type_name(exc_info.a)
+            b_name = self._get_type_name(exc_info.b)
+            if exc_info.has_fields_chain():
+                a_field_name = self._get_filed_name(exc_info.a_fields_chain)
+                b_field_name = self._get_filed_name(exc_info.b_fields_chain)
+
+                message = f"Cannot map field '{a_field_name}' of type '{a_name}' to field '{b_field_name}' of type '{b_name}': {error_description}"
+            else:
+                message = f"Cannot map type '{a_name}' to type '{b_name}': {error_description}"
+
+        super(MappingException, self).__init__(message)
+
+    @staticmethod
+    def _get_type_name(t: Type) -> str:
+        if hasattr(t, '__name__'):
+            return t.__name__
+        else:
+            origin_name = get_origin(t)._name
+            args = list(map(lambda x: MappingException._get_type_name(x), get_args(t)))
+            return f"{origin_name}[{', '.join(args)}]"
+
+
+
+    @staticmethod
+    def _get_filed_name(fields_chain: List[str]):
+        return '.'.join(fields_chain)
+
+
 class DuplicateMappingException(MappingException):
-    def __init__(self, left: Type, right: Type):
-        super(DuplicateMappingException, self).__init__(
-            f"Mapping from '{left.__name__}' to '{right.__name__}' already defined."
-        )
+    def __init__(self, exc_info: MappingExceptionInfo):
+        super(DuplicateMappingException, self).__init__("Mapping already defined.", exc_info)
 
 
 class MissingMappingException(MappingException):
-    def __init__(self, left: Type, right: Type):
-        super(MissingMappingException, self).__init__(
-            f"Mapping from '{left.__name__}' to '{right.__name__}' is not defined."
-        )
+    def __init__(self, exc_info: MappingExceptionInfo):
+        super(MissingMappingException, self).__init__(f"Mapping is not defined.", exc_info)
 
 
 class ImproperlyConfiguredException(MappingException):
-    def __init__(self, left: Type, right: Type, error: str):
-        super(ImproperlyConfiguredException, self).__init__(
-            f"Mapping from '{left.__name__}' to '{right.__name__}' is improperly configured: {error}"
-        )
+    def __init__(self, exc_info: MappingExceptionInfo, error: str):
+        super(ImproperlyConfiguredException, self).__init__(f"Mapping is improperly configured: {error}.")
 
 
 class UnsupportedFieldException(MappingException):
@@ -48,17 +71,8 @@ class UnsupportedFieldException(MappingException):
 
 
 class FieldMappingException(MappingException):
-    def __init__(self, error: str, exc_info: Optional[FieldMappingExceptionInfo] = None):
-        if exc_info is None:
-            message = error
-        elif exc_info.has_fields_chain():
-            message = (
-                f"Cannot map field '{'.'.join(exc_info.a_fields_chain)}' of type '{exc_info.a.__name__}' to "
-                f"field '{'.'.join(exc_info.b_fields_chain)}' of type '{exc_info.b.__name__}': {error}"
-            )
-        else:
-            message = f"Cannot map type '{exc_info.a}' to type '{exc_info.b}': {error}"
-        super(MappingException, self).__init__(message)
+    def __init__(self, exc_info: MappingExceptionInfo, error: str):
+        super(MappingException, self).__init__(exc_info, error)
 
 
 T = TypeVar("T")
@@ -342,13 +356,13 @@ class MappingConfigFlow:
 
     def l_to_r_empty(self):
         if self.l_to_r_touched:
-            raise ImproperlyConfiguredException(self.left, self.right, "empty mapping after another configuration")
+            raise ImproperlyConfiguredException(MappingExceptionInfo(self.left, self.right), "empty mapping after another configuration")
         self.l_to_r_touched = True
         return self
 
     def r_to_l_empty(self):
         if self.r_to_l_touched:
-            raise ImproperlyConfiguredException(self.left, self.right, "empty mapping after another configuration")
+            raise ImproperlyConfiguredException(MappingExceptionInfo(self.left, self.right), "empty mapping after another configuration")
         self.r_to_l_touched = True
         return self
 
@@ -360,11 +374,11 @@ class MappingConfigFlow:
     def map_matching(self, ignore_case: bool = False, check_types=True) -> "MappingConfigFlow":
         if self.left_descriptor.is_container_type() and self.right_descriptor.is_container_type():
             raise ImproperlyConfiguredException(
-                self.left, self.right, "map matching for two container types doesn't make sense"
+                MappingExceptionInfo(self.left, self.right), "map matching for two container types doesn't make sense"
             )
         if ignore_case and (self.left_descriptor.is_container_type() or self.right_descriptor.is_container_type()):
             raise ImproperlyConfiguredException(
-                self.left, self.right, "map matching for container types with ignored case does not supported yet"
+                MappingExceptionInfo(self.left, self.right), "map matching for container types with ignored case does not supported yet"
             )
 
         if ignore_case:
@@ -435,10 +449,10 @@ class Mapper:
 
         a_type_mappings[b] = rules
 
-    def map(self, a_obj: Any, b: Type[T], exc_info: Optional[FieldMappingExceptionInfo] = None) -> T:
+    def map(self, a_obj: Any, b: Type[T], exc_info: Optional[MappingExceptionInfo] = None) -> T:
         a = a_obj.__class__
         if exc_info is None:
-            exc_info = FieldMappingExceptionInfo(a, b)
+            exc_info = MappingExceptionInfo(a, b)
 
         if a == b or b is Any:
             return a_obj
@@ -449,19 +463,19 @@ class Mapper:
         elif self._has_primitive_mapping(a, b):
             return self._map_primitives(a_obj, b, exc_info)
         else:
-            raise MissingMappingException(a, b)
+            raise MissingMappingException(MappingExceptionInfo(a, b))
 
     def _has_mapping(self, a: Type[Any], b: Type[Any]) -> bool:
         return a in self.map_rules and b in self.map_rules[a]
 
-    def _map_with_map_rules(self, a_obj: Any, b: Type[Any], exc_info: FieldMappingExceptionInfo):
+    def _map_with_map_rules(self, a_obj: Any, b: Type[Any], exc_info: MappingExceptionInfo):
         a = a_obj.__class__
 
         constructor_args = {}
         fields = []
 
         for rule in self.map_rules[a][b]:
-            fields_exc_info = FieldMappingExceptionInfo(
+            fields_exc_info = MappingExceptionInfo(
                 rule.from_field.type,
                 rule.to_field.type,
                 exc_info.a_fields_chain + [rule.from_field.name],
@@ -471,7 +485,7 @@ class Mapper:
                 try:
                     value = rule.converter(rule.from_field.getter(a_obj))
                 except Exception as e:
-                    raise FieldMappingException("Error on value conversion", fields_exc_info) from e
+                    raise FieldMappingException(fields_exc_info, "Error on value conversion") from e
             else:
                 value = self.map(rule.from_field.getter(a_obj), rule.to_field.type, fields_exc_info)
 
@@ -490,18 +504,18 @@ class Mapper:
     def _has_primitive_mapping(self, a: Type[Any], b: Type[Any]) -> bool:
         return (a, b) in self.PRIMITIVE_CONVERTERS
 
-    def _map_primitives(self, a_obj: Any, b: Type[Any], exc_info: FieldMappingExceptionInfo):
+    def _map_primitives(self, a_obj: Any, b: Type[Any], exc_info: MappingExceptionInfo):
         a = a_obj.__class__
         primitive_converter = self.PRIMITIVE_CONVERTERS[(a, b)]
         try:
             return primitive_converter(a_obj)
         except Exception as e:
-            raise FieldMappingException("Exception on mapping primitive values", exc_info) from e
+            raise FieldMappingException(exc_info, "Exception on mapping primitive values") from e
 
     def _is_iterable_mapping_possible(self, a: Type[Any], b: Type[Any]) -> bool:
         return self._is_iterable(a) and self._is_iterable(b)
 
-    def _map_iterables(self, a_obj: Any, b: Type[Any], exc_info: FieldMappingExceptionInfo):
+    def _map_iterables(self, a_obj: Any, b: Type[Any], exc_info: MappingExceptionInfo):
         args = get_args(b)
         if len(args) == 0:
             # Iterable without type
@@ -510,7 +524,7 @@ class Mapper:
             try:
                 return to_type(*a_obj)
             except Exception as e:
-                raise FieldMappingException("Error on mapping iterable", exc_info) from e
+                raise FieldMappingException(exc_info, "Error on mapping iterable") from e
 
         elif len(args) == 1:
             # Iterable with type
@@ -522,7 +536,7 @@ class Mapper:
                 try:
                     mapped_list.append(self.map(item, to_type_item))
                 except Exception as e:
-                    raise FieldMappingException(f"Error on mapping iterable at index {index}", exc_info) from e
+                    raise FieldMappingException(exc_info, f"Error on mapping iterable at index {index}") from e
             return to_type(mapped_list)
 
         else:
@@ -536,7 +550,7 @@ class Mapper:
                 try:
                     mapped_list.append(self.map(item, to_type_item))
                 except Exception as e:
-                    raise FieldMappingException(f"Error on mapping iterable at index {index}", exc_info) from e
+                    raise FieldMappingException(exc_info, f"Error on mapping iterable at index {index}") from e
 
             return to_type(mapped_list)
 
