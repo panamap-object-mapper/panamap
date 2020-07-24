@@ -5,7 +5,13 @@ from panamap import Mapper
 
 
 class TestMapPrimitiveValues(TestCase):
-    def test_map_int_to_str(self):
+    def test_map_primitive_values(self):
+        mapper = Mapper()
+
+        self.assertEqual(mapper.map(123, str), "123")
+        self.assertEqual(mapper.map("456", int), 456)
+
+    def test_map_int_to_str_field(self):
         @dataclass
         class A:
             value: int
