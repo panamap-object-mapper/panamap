@@ -4,7 +4,7 @@ L = TypeVar('L')
 R = TypeVar('R')
 
 
-def value_map(v_map: Dict[L, R]) -> Callable[[L], R]:
+def values_map(v_map: Dict[L, R]) -> Callable[[L], R]:
     def converter(left: L):
         if left in v_map:
             return v_map[left]

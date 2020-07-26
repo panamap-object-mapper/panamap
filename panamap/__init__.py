@@ -8,7 +8,7 @@ from panamap.panamap import (  # noqa: F401
     UnsupportedFieldException,
 )
 from panamap.tools import (  # noqa: F401
-    value_map
+    values_map
 )
 
 __version__ = pkg_resources.resource_string(__name__, "panamap.version").decode("utf-8").strip()
