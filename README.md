@@ -2,8 +2,8 @@
 
 [![PyPI version](https://badge.fury.io/py/panamap.svg)](https://badge.fury.io/py/panamap)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/panamap)](https://pypi.org/project/panamap/)
-[![Build Status](https://travis-ci.com/kirillsulim/panamap.svg?branch=master)](https://travis-ci.com/kirillsulim/panamap)
-[![Coveralls github](https://img.shields.io/coveralls/github/kirillsulim/panamap)](https://coveralls.io/github/kirillsulim/panamap)
+[![Build Status](https://travis-ci.com/panamap-object-mapper/panamap.svg?branch=master)](https://travis-ci.com/panamap-object-mapper/panamap)
+[![Coveralls github](https://img.shields.io/coveralls/github/panamap-object-mapper/panamap)](https://coveralls.io/github/panamap-object-mapper/panamap?branch=master)
 
 
 Panamap is a Python object mapper. It is useful to avoid boilerplate code when copying data between objects with
@@ -271,14 +271,16 @@ mapper.mapping(Nested, dict) \
     .map_matching() \
     .register()
 
-a = mapper.map({
-    "nested": {
-        "value": "abc",
+a = mapper.map(
+    {
+        "nested": {
+            "value": "abc",
+        },
+        "list_of_nested": [
+            {"value": "def",},
+            {"value": "xyz",},
+        ]
     },
-    "list_of_nested": [
-        {"value": "def",},
-        {"value": "xyz",},
-    ]},
     A,
 )
 print(a)
@@ -287,7 +289,7 @@ print(a)
 
 ### Mapping protobuf generated classes
 
-To map protobuf generated classes use separate module [panamap-proto](https://github.com/kirillsulim/panamap-proto). 
+To map protobuf generated classes use separate module [panamap-proto](https://github.com/panamap-object-mapper/panamap-proto).
 
 ## Contributing
 
