@@ -131,7 +131,9 @@ class TestMapDataclasses(TestCase):
         mapper.mapping(ForwardRefListCarrierA, ForwardRefListCarrierB).map_matching().register()
         mapper.mapping(ForwardReferencedA, ForwardReferencedB).map_matching().register()
 
-        b = mapper.map(ForwardRefListCarrierA([ForwardReferencedA("abc"), ForwardReferencedA("def")]), ForwardRefListCarrierB)
+        b = mapper.map(
+            ForwardRefListCarrierA([ForwardReferencedA("abc"), ForwardReferencedA("def")]), ForwardRefListCarrierB
+        )
 
         self.assertEqual(b.__class__, ForwardRefListCarrierB)
         self.assertEqual(len(b.value), 2)
@@ -146,4 +148,6 @@ class TestMapDataclasses(TestCase):
         mapper.mapping(ForwardReferencedB, dict).map_matching().register()
 
         with self.assertRaises(FieldMappingException):
-            mapper.map(ForwardRefListCarrierA([ForwardReferencedA("abc"), ForwardReferencedA("def")]), ForwardRefListCarrierB)
+            mapper.map(
+                ForwardRefListCarrierA([ForwardReferencedA("abc"), ForwardReferencedA("def")]), ForwardRefListCarrierB
+            )
