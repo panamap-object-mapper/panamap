@@ -84,7 +84,6 @@ mapper.mapping(LangA, LangB) \
         LangA.PYTHON: LangB.PY,
         LangA.JAVA: LangB.JAVA,
         LangA.CPP: LangB.CPP,
-
     })) \
     .register()
 
