@@ -1,8 +1,8 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List
 from unittest import TestCase
 
-from panamap import Mapper, MissingMappingException
+from panamap import Mapper, MissingMappingException, FieldMappingException
 
 
 @dataclass
@@ -48,12 +48,27 @@ class OptionalStringCarrier:
 
 
 @dataclass
-class ForwardRefCarrier:
-    value: "ForwardReferenced"
+class ForwardRefCarrierA:
+    value: "ForwardReferencedA"
 
 
 @dataclass
-class ForwardReferenced:
+class ForwardRefListCarrierA:
+    value: List["ForwardReferencedA"]
+
+
+@dataclass
+class ForwardReferencedA:
+    value: str
+
+
+@dataclass
+class ForwardRefListCarrierB:
+    value: List["ForwardReferencedB"]
+
+
+@dataclass
+class ForwardReferencedB:
     value: str
 
 
@@ -102,11 +117,37 @@ class TestMapDataclasses(TestCase):
 
     def test_forward_ref_resolving(self):
         mapper = Mapper()
-        mapper.mapping(ForwardRefCarrier, dict).map_matching().register()
-        mapper.mapping(ForwardReferenced, dict).map_matching().register()
+        mapper.mapping(ForwardRefCarrierA, dict).map_matching().register()
+        mapper.mapping(ForwardReferencedA, dict).map_matching().register()
 
-        a = mapper.map({"value": {"value": "abc"}}, ForwardRefCarrier)
+        a = mapper.map({"value": {"value": "abc"}}, ForwardRefCarrierA)
 
-        self.assertEqual(a.__class__, ForwardRefCarrier)
-        self.assertEqual(a.value.__class__, ForwardReferenced)
+        self.assertEqual(a.__class__, ForwardRefCarrierA)
+        self.assertEqual(a.value.__class__, ForwardReferencedA)
         self.assertEqual(a.value.value, "abc")
+
+    def test_forward_ref_in_list_resolving(self):
+        mapper = Mapper()
+        mapper.mapping(ForwardRefListCarrierA, ForwardRefListCarrierB).map_matching().register()
+        mapper.mapping(ForwardReferencedA, ForwardReferencedB).map_matching().register()
+
+        b = mapper.map(
+            ForwardRefListCarrierA([ForwardReferencedA("abc"), ForwardReferencedA("def")]), ForwardRefListCarrierB
+        )
+
+        self.assertEqual(b.__class__, ForwardRefListCarrierB)
+        self.assertEqual(len(b.value), 2)
+        self.assertEqual(b.value[0].__class__, ForwardReferencedB)
+        self.assertEqual(b.value[0].value, "abc")
+        self.assertEqual(b.value[1].__class__, ForwardReferencedB)
+        self.assertEqual(b.value[1].value, "def")
+
+    def test_raises_correct_exception_on_missing_mapping_with_forward_ref(self):
+        mapper = Mapper()
+        mapper.mapping(ForwardRefListCarrierA, ForwardRefListCarrierB).map_matching().register()
+        mapper.mapping(ForwardReferencedB, dict).map_matching().register()
+
+        with self.assertRaises(FieldMappingException):
+            mapper.map(
+                ForwardRefListCarrierA([ForwardReferencedA("abc"), ForwardReferencedA("def")]), ForwardRefListCarrierB
+            )

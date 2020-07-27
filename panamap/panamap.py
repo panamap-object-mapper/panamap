@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from inspect import signature
 from copy import deepcopy
 
-from typing_inspect import get_origin, get_args, is_union_type, is_forward_ref
+from typing_inspect import get_origin, get_args, is_union_type, is_forward_ref, get_forward_arg
 
 
 @dataclass
@@ -45,7 +45,9 @@ class MappingException(Exception):
         else:
             origin = get_origin(t)
             if origin:
-                name = origin._name
+                name = MappingException._get_type_name(origin)
+            elif is_forward_ref(t):
+                name = get_forward_arg(t)
             else:
                 name = t._name
             args = list(map(lambda x: MappingException._get_type_name(x), get_args(t)))
@@ -560,7 +562,7 @@ class Mapper:
             if isinstance(t, str):
                 name = t
             else:
-                name = get_args(t)[0]
+                name = get_forward_arg(t)
             if name in self.forward_ref_dict:
                 return self.forward_ref_dict[name]
             else:

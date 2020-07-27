@@ -84,12 +84,42 @@ mapper.mapping(LangA, LangB) \
         LangA.PYTHON: LangB.PY,
         LangA.JAVA: LangB.JAVA,
         LangA.CPP: LangB.CPP,
-
     })) \
     .register()
 
 print(mapper.map(LangA.PYTHON, LangB).name)
 # PY
+```
+
+### Mapping context
+
+In some cases you need to pass some context to mapping operation. 
+You can do it with `context` parameter in `map` method.
+Context is a dict and will be passed to converter as a second argument.
+
+```python
+from panamap import Mapper
+
+
+class A:
+    def __init__(self, a_value: int):
+        self.a_value = a_value
+
+
+class B:
+    def __init__(self, b_value: int, contextual: str):
+        self.b_value = b_value
+        self.contextual = contextual
+
+
+mapper = Mapper()
+mapper.mapping(A, B) \
+    .l_to_r_converter(lambda a, ctx: B(a.a_value, ctx["contextual"])) \
+    .register()
+
+b = mapper.map(A(123), B, {"contextual": "contextual value"})
+print(b.contextual)
+# 'contextual value'
 ```
 
 ### Mapping simple classes
