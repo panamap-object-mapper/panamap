@@ -16,7 +16,7 @@ setup(
     description="Python object mapper",
     long_description=load_from("README.md"),
     long_description_content_type="text/markdown",
-    url="https://github.com/kirillsulim/panamap",
+    url="https://github.com/panamap-object-mapper/panamap",
     author="Kirill Sulim",
     author_email="kirillsulim@gmail.com",
     license="MIT",
