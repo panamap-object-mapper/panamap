@@ -6,6 +6,8 @@ from panamap.panamap import (  # noqa: F401
     ImproperlyConfiguredException,
     MappingDescriptor,
     UnsupportedFieldException,
+    FieldMappingException,
+    DuplicateMappingException,
 )
 from panamap.tools import values_map  # noqa: F401
 
