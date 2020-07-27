@@ -321,8 +321,8 @@ class DictMappingDescriptor(MappingDescriptor):
         return True
 
 
-L = TypeVar('L')
-R = TypeVar('R')
+L = TypeVar("L")
+R = TypeVar("R")
 
 
 class MappingConfigFlow(Generic[L, R]):
@@ -438,13 +438,17 @@ class MappingConfigFlow(Generic[L, R]):
             self.bidirectional(lf_name, rf_name)
         return self
 
-    def l_to_r_converter(self, converter: Union[Callable[[L], R], Callable[[L, Dict[str, Any]], R]]) -> "MappingConfigFlow":
+    def l_to_r_converter(
+        self, converter: Union[Callable[[L], R], Callable[[L, Dict[str, Any]], R]]
+    ) -> "MappingConfigFlow":
         self.l_to_r_converter_callable = self._wrap_converter_if_need_to(converter)
 
         self._l_to_r_check()
         return self
 
-    def r_to_l_converter(self, converter: Union[Callable[[R], L], Callable[[R, Dict[str, Any]], L]]) -> "MappingConfigFlow":
+    def r_to_l_converter(
+        self, converter: Union[Callable[[R], L], Callable[[R, Dict[str, Any]], L]]
+    ) -> "MappingConfigFlow":
         self.r_to_l_converter_callable = self._wrap_converter_if_need_to(converter)
 
         self._r_to_l_check()
@@ -463,20 +467,19 @@ class MappingConfigFlow(Generic[L, R]):
     def _l_to_r_check(self):
         if self.l_to_r_touched and self.l_to_r_converter_callable is not None:
             raise ImproperlyConfiguredException(
-                MappingExceptionInfo(self.left, self.right),
-                "Map rules and converter defined at the same time"
+                MappingExceptionInfo(self.left, self.right), "Map rules and converter defined at the same time"
             )
 
     def _r_to_l_check(self):
         if self.r_to_l_touched and self.r_to_l_converter_callable is not None:
             raise ImproperlyConfiguredException(
-                MappingExceptionInfo(self.right, self.left),
-                "Map rules and converter defined at the same time"
+                MappingExceptionInfo(self.right, self.left), "Map rules and converter defined at the same time"
             )
 
     @staticmethod
     def _wrap_converter_if_need_to(converter: Union[Callable[[T1], T2], Callable[[T1, Dict[str, Any]], T2]]):
         if len(signature(converter).parameters) == 1:
+
             def wrapped_converter(left: L, ignored_context: Dict[str, Any]):
                 return converter(left)
 
@@ -565,7 +568,9 @@ class Mapper:
         else:
             return t
 
-    def map(self, a_obj: Any, b: Type[T], context: Dict[str, Any] = None, *,  exc_info: Optional[MappingExceptionInfo] = None) -> T:
+    def map(
+        self, a_obj: Any, b: Type[T], context: Dict[str, Any] = None, *, exc_info: Optional[MappingExceptionInfo] = None
+    ) -> T:
         a = a_obj.__class__
         if context is None:
             context = {}
@@ -588,7 +593,9 @@ class Mapper:
     def _has_converter(self, a: Type[Any], b: Type[Any]) -> bool:
         return a in self.converters and b in self.converters[a]
 
-    def _convert_with_converter(self, a_obj: Any, b: Type[Any], context: Dict[str, Any], exc_info: MappingExceptionInfo):
+    def _convert_with_converter(
+        self, a_obj: Any, b: Type[Any], context: Dict[str, Any], exc_info: MappingExceptionInfo
+    ):
         a = a_obj.__class__
         try:
             return self.converters[a][b](a_obj, context)
@@ -674,7 +681,7 @@ class Mapper:
                     exc_info.a,
                     exc_info.b,
                     exc_info.a_fields_chain + [f"[{index}]"],
-                    exc_info.b_fields_chain + [f"[{index}]"]
+                    exc_info.b_fields_chain + [f"[{index}]"],
                 )
                 try:
                     mapped_list.append(self.map(item, to_type_item, context, exc_info=current_exc_info))
@@ -693,7 +700,7 @@ class Mapper:
                     exc_info.a,
                     exc_info.b,
                     exc_info.a_fields_chain + [f"[{index}]"],
-                    exc_info.b_fields_chain + [f"[{index}]"]
+                    exc_info.b_fields_chain + [f"[{index}]"],
                 )
                 try:
                     mapped_list.append(self.map(item, to_type_item, context, exc_info=current_exc_info))

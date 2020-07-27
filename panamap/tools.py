@@ -1,7 +1,7 @@
 from typing import Dict, TypeVar, Callable
 
-L = TypeVar('L')
-R = TypeVar('R')
+L = TypeVar("L")
+R = TypeVar("R")
 
 
 def values_map(v_map: Dict[L, R]) -> Callable[[L], R]:
