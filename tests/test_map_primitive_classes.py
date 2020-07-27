@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from panamap import Mapper
+from panamap import Mapper, ImproperlyConfiguredException
 
 
 class A:
@@ -57,3 +57,15 @@ class TestMapPrimitiveClasses(TestCase):
         self.assertEqual(b.__class__, B)
         self.assertEqual(b.b_value, 123)
         self.assertEqual(b.additional_value, 456)
+
+    def test_map_with_converter(self):
+        mapper = Mapper()
+        mapper.mapping(A, B).l_to_r_converter(lambda a: B(a.a_value + 10)).register()
+
+        b = mapper.map(A(123), B)
+        self.assertEqual(b.b_value, 133)
+
+    def test_raise_when_converter_and_mapping_defined(self):
+        with self.assertRaises(ImproperlyConfiguredException):
+            mapper = Mapper()
+            mapper.mapping(A, B).l_to_r_converter(lambda a: B(a.a_value + 10)).l_to_r("a_value", "b_value").register()

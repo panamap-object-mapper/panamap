@@ -31,6 +31,67 @@ print(mapper.map("123", int) + 1)
 # 124
 ```
 
+There is a set of standart primitive values converters.
+
+### Mapping classes with converter
+
+The most straitforward usage of mapper is to set converter from class A to class B. 
+Here is an example of such setup:
+
+```python
+from panamap import Mapper
+
+class A:
+    def __init__(self, a_value: int):
+        self.a_value = a_value
+
+
+class B:
+    def __init__(self, b_value: int):
+        self.b_value = b_value
+
+mapper = Mapper()
+mapper.mapping(A, B) \
+    .l_to_r_converter(lambda a: B(a.a_value)) \
+    .register()
+
+b = mapper.map(A(123), B)
+print(b.b_value)
+# 123
+```
+
+If there is limited set of values, enums are most common case, you can use utility function `values_map`:
+
+```python
+from enum import Enum
+from panamap import Mapper, values_map
+
+class LangA(Enum):
+    PYTHON = 1
+    JAVA = 2
+    CPP = 3
+
+
+class LangB(Enum):
+    PY = 1
+    JAVA = 2
+    CPP = 3
+
+
+mapper = Mapper()
+mapper.mapping(LangA, LangB) \
+    .l_to_r_converter(values_map({
+        LangA.PYTHON: LangB.PY,
+        LangA.JAVA: LangB.JAVA,
+        LangA.CPP: LangB.CPP,
+
+    })) \
+    .register()
+
+print(mapper.map(LangA.PYTHON, LangB).name)
+# PY
+```
+
 ### Mapping simple classes
 
 To set up mapping call `mapping` function of mapper object.
