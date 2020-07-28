@@ -124,7 +124,14 @@ class MappingDescriptor(ABC, Generic[T]):
     @classmethod
     @abstractmethod
     def supports_type(cls, t: Type[Any]) -> bool:
-        pass
+        """
+        Return true if descriptor can describe type
+        """
+        pass  # pragma: no cover
+
+    @classmethod
+    def resolve_type_name(cls, t: Type[Any]) -> Optional[str]:
+        return None  # pragma: no cover
 
     def get_field_descriptor(self, field_name: str) -> Optional[FieldDescriptor[T, F]]:
         if self.is_field_supported(field_name):
@@ -144,21 +151,21 @@ class MappingDescriptor(ABC, Generic[T]):
         """
         Return setter for field name
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def get_setter(self, field_name: str) -> Callable[[Dict, Any], None]:
         """
         Return getter for filed name
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def get_constructor_args(self) -> Set[str]:
         """
         Return constructor args
         """
-        pass
+        pass  # pragma: no cover
 
     def is_constructor_arg(self, field_name: str) -> bool:
         """
@@ -171,7 +178,7 @@ class MappingDescriptor(ABC, Generic[T]):
         """
         Return required constructor args
         """
-        pass
+        pass  # pragma: no cover
 
     def is_required_constructor_arg(self, field_name: str) -> bool:
         """
@@ -185,28 +192,28 @@ class MappingDescriptor(ABC, Generic[T]):
         Return set of declared fields. Note that if filed is not declared it still can be supported.
         Used in map_matching.
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def is_field_supported(self, field_name: str) -> bool:
         """
         Checks if field can be set
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def get_preferred_field_type(self, field_name: str) -> Type[Any]:
         """
         Returns filed type if available else Any
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def is_container_type(self) -> bool:
         """
         Marks container types designed to store arbitrary fields
         """
-        pass
+        pass  # pragma: no cover
 
     @staticmethod
     def uncase(field_name: str) -> str:
@@ -227,18 +234,6 @@ class CommonTypeMappingDescriptor(MappingDescriptor):
     def supports_type(cls, t: Type[Any]) -> bool:
         return True
 
-    def get_field_names(self, ignore_case: bool) -> Set[str]:
-        if ignore_case:
-            return set(self.uncased_dict.keys()).difference({"self"})
-        else:
-            return set(self.constructor_parameters.keys()).difference({"self"})
-
-    def get_canonical_field_name(self, field_name: str):
-        if field_name in self.constructor_parameters:
-            return field_name
-        else:
-            return self.uncased_dict.get(field_name)
-
     def get_getter(self, field_name: str) -> Callable[[T], Any]:
         def getter(obj: T):
             if hasattr(obj, field_name):
@@ -251,13 +246,6 @@ class CommonTypeMappingDescriptor(MappingDescriptor):
             setattr(obj, field_name, value)
 
         return setter
-
-    def get_field_type(self, field_name: str) -> Type[Any]:
-        param = self.constructor_parameters.get(field_name)
-        if param is not None:
-            return param.annotation
-        else:
-            return Any
 
     def get_preferred_field_type(self, field_name: str) -> Type[Any]:
         param = self.constructor_parameters.get(field_name)
@@ -550,12 +538,19 @@ class Mapper:
     def _add_class_to_forward_ref_dict(self, t: Type):
         if hasattr(t, "__name__"):
             name = t.__name__
-            if name in self.forward_ref_dict and t != self.forward_ref_dict[name]:
-                raise Exception(
-                    f"Conflicting forward references '{name}'. Rearrange your class definitions or use type aliases."
-                )
+        else:
+            for d in self.custom_descriptors:
+                name = d.resolve_type_name(t)
+                if name is not None:
+                    break
             else:
-                self.forward_ref_dict[name] = t
+                raise Exception(f"Cannot define name of class {t}")
+        if name in self.forward_ref_dict and t != self.forward_ref_dict[name]:
+            raise Exception(
+                f"Conflicting forward references '{name}'. Rearrange your class definitions or use type aliases."
+            )
+        else:
+            self.forward_ref_dict[name] = t
 
     def _resolve_forward_ref(self, t: Type[Any]) -> Type[Any]:
         if isinstance(t, str) or is_forward_ref(t):
@@ -593,27 +588,72 @@ class Mapper:
             raise MissingMappingException(exc_info, a, b)
 
     def _has_converter(self, a: Type[Any], b: Type[Any]) -> bool:
-        return a in self.converters and b in self.converters[a]
+        if a not in self.converters:
+            return False
+
+        b = self._resolve_forward_ref(b)
+        if is_union_type(b):
+            for actual_class in get_args(b):
+                if self._resolve_forward_ref(actual_class) in self.converters[a]:
+                    return True
+            else:
+                return False
+        else:
+            return b in self.converters[a]
 
     def _convert_with_converter(
         self, a_obj: Any, b: Type[Any], context: Dict[str, Any], exc_info: MappingExceptionInfo
     ):
         a = a_obj.__class__
+
+        if is_union_type(b):
+            for to_class in get_args(b):
+                to_class = self._resolve_forward_ref(to_class)
+                if to_class in self.converters[a]:
+                    converter = self.converters[a][to_class]
+                    break
+            else:
+                raise FieldMappingException(exc_info, f"Not found matching class in union {b}")
+        else:
+            converter = self.converters[a][b]
+
         try:
-            return self.converters[a][b](a_obj, context)
+            return converter(a_obj, context)
         except Exception as e:
             raise FieldMappingException(exc_info, "Error on converting") from e
 
     def _has_mapping_rules(self, a: Type[Any], b: Type[Any]) -> bool:
-        return a in self.map_rules and b in self.map_rules[a]
+        if a not in self.map_rules:
+            return False
+
+        b = self._resolve_forward_ref(b)
+        if is_union_type(b):
+            for actual_class in get_args(b):
+                if self._resolve_forward_ref(actual_class) in self.map_rules[a]:
+                    return True
+            else:
+                return False
+        else:
+            return b in self.map_rules[a]
 
     def _map_with_map_rules(self, a_obj: Any, b: Type[Any], context: Dict[str, Any], exc_info: MappingExceptionInfo):
         a = a_obj.__class__
 
+        if is_union_type(b):
+            for to_class in get_args(b):
+                if to_class in self.map_rules[a]:
+                    to_class = self._resolve_forward_ref(to_class)
+                    map_rules = self.map_rules[a][to_class]
+                    break
+            else:
+                raise FieldMappingException(exc_info, f"Not found matching class in union {b}")
+        else:
+            map_rules = self.map_rules[a][b]
+
         constructor_args = {}
         fields = []
 
-        for rule in self.map_rules[a][b]:
+        for rule in map_rules:
             from_field_type = self._resolve_forward_ref(rule.from_field.type)
             to_field_type = self._resolve_forward_ref(rule.to_field.type)
             fields_exc_info = MappingExceptionInfo(
@@ -712,6 +752,7 @@ class Mapper:
             return to_type(mapped_list)
 
     def _is_direct_assignment_possible(self, a: Type[Any], b: Type[Any]) -> bool:
+        b = self._resolve_forward_ref(b)
         if b is Any:
             return True
         elif is_union_type(b):
