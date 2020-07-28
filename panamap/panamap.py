@@ -593,27 +593,70 @@ class Mapper:
             raise MissingMappingException(exc_info, a, b)
 
     def _has_converter(self, a: Type[Any], b: Type[Any]) -> bool:
-        return a in self.converters and b in self.converters[a]
+        if a not in self.converters:
+            return False
 
-    def _convert_with_converter(
-        self, a_obj: Any, b: Type[Any], context: Dict[str, Any], exc_info: MappingExceptionInfo
-    ):
+        b = self._resolve_forward_ref(b)
+        if is_union_type(b):
+            for actual_class in get_args(b):
+                if self._resolve_forward_ref(actual_class) in self.converters[a]:
+                    return True
+            else:
+                return False
+        else:
+            return b in self.converters[a]
+
+    def _convert_with_converter(self, a_obj: Any, b: Type[Any], context: Dict[str, Any], exc_info: MappingExceptionInfo):
         a = a_obj.__class__
+
+        if is_union_type(b):
+            for to_class in get_args(b):
+                to_class = self._resolve_forward_ref(to_class)
+                if to_class in self.converters[a]:
+                    converter = self.converters[a][to_class]
+                    break
+            else:
+                raise FieldMappingException(exc_info, f"Not found matching class in union {b}")
+        else:
+            converter = self.converters[a][b]
+
         try:
-            return self.converters[a][b](a_obj, context)
+            return converter(a_obj, context)
         except Exception as e:
             raise FieldMappingException(exc_info, "Error on converting") from e
 
     def _has_mapping_rules(self, a: Type[Any], b: Type[Any]) -> bool:
-        return a in self.map_rules and b in self.map_rules[a]
+        if a not in self.map_rules:
+            return False
+
+        b = self._resolve_forward_ref(b)
+        if is_union_type(b):
+            for actual_class in get_args(b):
+                if self._resolve_forward_ref(actual_class) in self.map_rules[a]:
+                    return True
+            else:
+                return False
+        else:
+            return b in self.map_rules[a]
 
     def _map_with_map_rules(self, a_obj: Any, b: Type[Any], context: Dict[str, Any], exc_info: MappingExceptionInfo):
         a = a_obj.__class__
 
+        if is_union_type(b):
+            for to_class in get_args(b):
+                if to_class in self.map_rules[a]:
+                    to_class = self._resolve_forward_ref(to_class)
+                    map_rules = self.map_rules[a][to_class]
+                    break
+            else:
+                raise FieldMappingException(exc_info, f"Not found matching class in union {b}")
+        else:
+            map_rules = self.map_rules[a][b]
+
         constructor_args = {}
         fields = []
 
-        for rule in self.map_rules[a][b]:
+        for rule in map_rules:
             from_field_type = self._resolve_forward_ref(rule.from_field.type)
             to_field_type = self._resolve_forward_ref(rule.to_field.type)
             fields_exc_info = MappingExceptionInfo(
@@ -712,6 +755,7 @@ class Mapper:
             return to_type(mapped_list)
 
     def _is_direct_assignment_possible(self, a: Type[Any], b: Type[Any]) -> bool:
+        b = self._resolve_forward_ref(b)
         if b is Any:
             return True
         elif is_union_type(b):

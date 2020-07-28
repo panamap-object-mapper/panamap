@@ -1,6 +1,7 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 from unittest import TestCase
+from enum import Enum
 
 from panamap import Mapper, ImproperlyConfiguredException
 
@@ -24,6 +25,17 @@ class A:
 @dataclass
 class SimpleWithDefaultValue:
     value: str = "Default value"
+
+
+@dataclass
+class LangCarrier:
+    lang: Optional["Lang"]
+
+
+class Lang(Enum):
+    PYTHON = "python"
+    JAVA = "java"
+    CPP = "cpp"
 
 
 class TestMapToDict(TestCase):
@@ -66,3 +78,15 @@ class TestMapToDict(TestCase):
 
         a = mapper.map({}, SimpleWithDefaultValue)
         self.assertEqual(a.value, "Default value")
+
+    def test_parse_optional_forward_ref_enum(self):
+        mapper = Mapper()
+        mapper.mapping(dict, LangCarrier) \
+            .map_matching() \
+            .register()
+        mapper.mapping(str, Lang) \
+            .l_to_r_converter(lambda s: Lang(s)) \
+            .register()
+
+        lang_carrier = mapper.map({"lang": "python"}, LangCarrier)
+        self.assertEqual(lang_carrier.lang, Lang.PYTHON)
