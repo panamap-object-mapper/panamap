@@ -124,7 +124,14 @@ class MappingDescriptor(ABC, Generic[T]):
     @classmethod
     @abstractmethod
     def supports_type(cls, t: Type[Any]) -> bool:
+        """
+        Return true if descriptor can describe type
+        """
         pass
+
+    @classmethod
+    def resolve_type_name(cls, t: Type[Any]) -> Optional[str]:
+        return None
 
     def get_field_descriptor(self, field_name: str) -> Optional[FieldDescriptor[T, F]]:
         if self.is_field_supported(field_name):
@@ -550,12 +557,19 @@ class Mapper:
     def _add_class_to_forward_ref_dict(self, t: Type):
         if hasattr(t, "__name__"):
             name = t.__name__
-            if name in self.forward_ref_dict and t != self.forward_ref_dict[name]:
-                raise Exception(
-                    f"Conflicting forward references '{name}'. Rearrange your class definitions or use type aliases."
-                )
+        else:
+            for d in self.custom_descriptors:
+                name = d.resolve_type_name(t)
+                if name is not None:
+                    break
             else:
-                self.forward_ref_dict[name] = t
+                raise Exception(f"Cannot define name of class {t}")
+        if name in self.forward_ref_dict and t != self.forward_ref_dict[name]:
+            raise Exception(
+                f"Conflicting forward references '{name}'. Rearrange your class definitions or use type aliases."
+            )
+        else:
+            self.forward_ref_dict[name] = t
 
     def _resolve_forward_ref(self, t: Type[Any]) -> Type[Any]:
         if isinstance(t, str) or is_forward_ref(t):
