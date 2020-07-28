@@ -620,7 +620,9 @@ class Mapper:
         else:
             return b in self.converters[a]
 
-    def _convert_with_converter(self, a_obj: Any, b: Type[Any], context: Dict[str, Any], exc_info: MappingExceptionInfo):
+    def _convert_with_converter(
+        self, a_obj: Any, b: Type[Any], context: Dict[str, Any], exc_info: MappingExceptionInfo
+    ):
         a = a_obj.__class__
 
         if is_union_type(b):

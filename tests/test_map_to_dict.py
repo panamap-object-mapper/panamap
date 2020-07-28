@@ -81,12 +81,8 @@ class TestMapToDict(TestCase):
 
     def test_parse_optional_forward_ref_enum(self):
         mapper = Mapper()
-        mapper.mapping(dict, LangCarrier) \
-            .map_matching() \
-            .register()
-        mapper.mapping(str, Lang) \
-            .l_to_r_converter(lambda s: Lang(s)) \
-            .register()
+        mapper.mapping(dict, LangCarrier).map_matching().register()
+        mapper.mapping(str, Lang).l_to_r_converter(lambda s: Lang(s)).register()
 
         lang_carrier = mapper.map({"lang": "python"}, LangCarrier)
         self.assertEqual(lang_carrier.lang, Lang.PYTHON)
