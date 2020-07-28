@@ -199,7 +199,7 @@ class MappingDescriptor(ABC, Generic[T]):
         """
         Checks if field can be set
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def get_preferred_field_type(self, field_name: str) -> Type[Any]:
