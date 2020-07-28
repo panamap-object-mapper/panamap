@@ -127,11 +127,11 @@ class MappingDescriptor(ABC, Generic[T]):
         """
         Return true if descriptor can describe type
         """
-        pass
+        pass  # pragma: no cover
 
     @classmethod
     def resolve_type_name(cls, t: Type[Any]) -> Optional[str]:
-        return None
+        return None  # pragma: no cover
 
     def get_field_descriptor(self, field_name: str) -> Optional[FieldDescriptor[T, F]]:
         if self.is_field_supported(field_name):
@@ -151,21 +151,21 @@ class MappingDescriptor(ABC, Generic[T]):
         """
         Return setter for field name
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def get_setter(self, field_name: str) -> Callable[[Dict, Any], None]:
         """
         Return getter for filed name
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def get_constructor_args(self) -> Set[str]:
         """
         Return constructor args
         """
-        pass
+        pass  # pragma: no cover
 
     def is_constructor_arg(self, field_name: str) -> bool:
         """
@@ -178,7 +178,7 @@ class MappingDescriptor(ABC, Generic[T]):
         """
         Return required constructor args
         """
-        pass
+        pass  # pragma: no cover
 
     def is_required_constructor_arg(self, field_name: str) -> bool:
         """
@@ -192,7 +192,7 @@ class MappingDescriptor(ABC, Generic[T]):
         Return set of declared fields. Note that if filed is not declared it still can be supported.
         Used in map_matching.
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def is_field_supported(self, field_name: str) -> bool:
@@ -206,14 +206,14 @@ class MappingDescriptor(ABC, Generic[T]):
         """
         Returns filed type if available else Any
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def is_container_type(self) -> bool:
         """
         Marks container types designed to store arbitrary fields
         """
-        pass
+        pass  # pragma: no cover
 
     @staticmethod
     def uncase(field_name: str) -> str:
@@ -234,18 +234,6 @@ class CommonTypeMappingDescriptor(MappingDescriptor):
     def supports_type(cls, t: Type[Any]) -> bool:
         return True
 
-    def get_field_names(self, ignore_case: bool) -> Set[str]:
-        if ignore_case:
-            return set(self.uncased_dict.keys()).difference({"self"})
-        else:
-            return set(self.constructor_parameters.keys()).difference({"self"})
-
-    def get_canonical_field_name(self, field_name: str):
-        if field_name in self.constructor_parameters:
-            return field_name
-        else:
-            return self.uncased_dict.get(field_name)
-
     def get_getter(self, field_name: str) -> Callable[[T], Any]:
         def getter(obj: T):
             if hasattr(obj, field_name):
@@ -258,13 +246,6 @@ class CommonTypeMappingDescriptor(MappingDescriptor):
             setattr(obj, field_name, value)
 
         return setter
-
-    def get_field_type(self, field_name: str) -> Type[Any]:
-        param = self.constructor_parameters.get(field_name)
-        if param is not None:
-            return param.annotation
-        else:
-            return Any
 
     def get_preferred_field_type(self, field_name: str) -> Type[Any]:
         param = self.constructor_parameters.get(field_name)
