@@ -23,7 +23,7 @@ setup(
     packages=find_packages(include=["panamap",]),
     package_data={"panamap": ["panamap.version",]},
     test_suite="tests",
-    install_requires=["typing_inspect",],
+    install_requires=["typing_inspect>=0.6.0",],
     classifiers=[
         "Development Status :: 4 - Beta",
         "License :: OSI Approved :: MIT License",
